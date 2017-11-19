@@ -1,4 +1,4 @@
-package sigbench
+package sessions
 
 import (
 	"log"
@@ -14,6 +14,7 @@ type Session interface {
 
 var SessionMap = map[string]Session{
 	"dummy": &DummySession{},
+	"http-get": &HttpGetSession{},
 }
 
 type DummySession struct {

@@ -14,21 +14,37 @@ func startAsMaster() {
 	c := &sigbench.MasterController{}
 	c.RegisterAgent("localhost:7000")
 
+	// j := &sigbench.Job{
+	// 	Phases: []sigbench.JobPhase{
+	// 		sigbench.JobPhase{
+	// 			Name: "First",
+	// 			UsersPerSecond: 1,
+	// 			Duration: 3 * time.Second,
+	// 		},
+	// 		sigbench.JobPhase{
+	// 			Name: "Second",
+	// 			UsersPerSecond: 3,
+	// 			Duration: 3 * time.Second,
+	// 		},
+	// 	},
+	// 	SessionNames: []string{
+	// 		"dummy",
+	// 	},
+	// 	SessionPercentages: []float64{
+	// 		1,
+	// 	},
+	// }
+
 	j := &sigbench.Job{
 		Phases: []sigbench.JobPhase{
 			sigbench.JobPhase{
-				Name: "First",
-				UsersPerSecond: 1,
-				Duration: 3 * time.Second,
-			},
-			sigbench.JobPhase{
-				Name: "Second",
-				UsersPerSecond: 3,
-				Duration: 3 * time.Second,
+				Name: "Get",
+				UsersPerSecond: 10,
+				Duration: 10 * time.Second,
 			},
 		},
 		SessionNames: []string{
-			"dummy",
+			"http-get",
 		},
 		SessionPercentages: []float64{
 			1,
