@@ -12,8 +12,8 @@ import (
 
 type SignalRCoreEcho struct {
 	cntInProgress int64
-	cntError   int64
-	cntSuccess int64
+	cntError      int64
+	cntSuccess    int64
 }
 
 func (s *SignalRCoreEcho) Name() string {
@@ -49,7 +49,7 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
-	host := "localhost:5000"
+	host := ctx.Params[ParamHost]
 	handshakeReq, err := http.NewRequest(http.MethodOptions, "http://"+host+"/chat", nil)
 	if err != nil {
 		s.logError("Fail to construct handshake request", err)
@@ -137,7 +137,7 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 func (s *SignalRCoreEcho) Counters() map[string]int64 {
 	return map[string]int64{
 		"signalrcore:echo:inprogress": atomic.LoadInt64(&s.cntInProgress),
-		"signalrcore:echo:success": atomic.LoadInt64(&s.cntSuccess),
-		"signalrcore:echo:error":   atomic.LoadInt64(&s.cntError),
+		"signalrcore:echo:success":    atomic.LoadInt64(&s.cntSuccess),
+		"signalrcore:echo:error":      atomic.LoadInt64(&s.cntError),
 	}
 }

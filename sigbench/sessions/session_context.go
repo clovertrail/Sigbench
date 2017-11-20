@@ -1,5 +1,6 @@
 package sessions
 
 type SessionContext struct {
-	Phase string
+	Phase  string
+	Params map[string]string
 }

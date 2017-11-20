@@ -4,7 +4,7 @@ import "net/rpc"
 
 type AgentDelegate struct {
 	Address string
-	Client *rpc.Client
+	Client  *rpc.Client
 }
 
 func NewAgentDelegate(address string) (*AgentDelegate, error) {
@@ -14,7 +14,7 @@ func NewAgentDelegate(address string) (*AgentDelegate, error) {
 	}
 	agentDelegate := &AgentDelegate{
 		Address: address,
-		Client: client,
+		Client:  client,
 	}
 	return agentDelegate, nil
 }

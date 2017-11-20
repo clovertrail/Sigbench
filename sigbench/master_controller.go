@@ -1,14 +1,14 @@
 package sigbench
 
 import (
-	// "errors"
+// "errors"
 )
 import (
-	"sync"
 	"log"
-	"time"
-	"strconv"
 	"sort"
+	"strconv"
+	"sync"
+	"time"
 )
 
 type MasterController struct {
@@ -59,13 +59,13 @@ func (c *MasterController) collectCounters() map[string]int64 {
 	return counters
 }
 
-func (c *MasterController) watchCounters(stopChan chan bool) {
+func (c *MasterController) watchCounters(stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
-		case <- ticker.C:
+		case <-ticker.C:
 			c.printCounters(c.collectCounters())
-		case <- stopChan:
+		case <-stopChan:
 			ticker.Stop()
 			return
 		}
@@ -101,7 +101,7 @@ func (c *MasterController) Run(job *Job) error {
 		wg.Add(1)
 		go func(agent *AgentDelegate) {
 			args := &AgentRunArgs{
-				Job: *job,
+				Job:        *job,
 				AgentCount: agentCount,
 			}
 			var result AgentRunResult
@@ -111,18 +111,18 @@ func (c *MasterController) Run(job *Job) error {
 			}
 
 			wg.Done()
-		}(agent);
+		}(agent)
 	}
 
-	stopWatchCounterChan := make(chan bool)
+	stopWatchCounterChan := make(chan struct{})
 	go c.watchCounters(stopWatchCounterChan)
 
 	wg.Wait()
 
-	stopWatchCounterChan <- true
+	close(stopWatchCounterChan)
 
 	log.Println("--- Finished ---")
 	c.printCounters(c.collectCounters())
 
-	return nil;
+	return nil
 }

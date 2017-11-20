@@ -10,7 +10,7 @@ import (
 type HttpGetSession struct {
 	counterInitiated int64
 	counterCompleted int64
-	counterError int64
+	counterError     int64
 }
 
 func (s *HttpGetSession) Name() string {
@@ -46,7 +46,6 @@ func (s *HttpGetSession) Counters() map[string]int64 {
 	return map[string]int64{
 		"initiated": atomic.LoadInt64(&s.counterInitiated),
 		"completed": atomic.LoadInt64(&s.counterCompleted),
-		"error": atomic.LoadInt64(&s.counterError),
+		"error":     atomic.LoadInt64(&s.counterError),
 	}
 }
-

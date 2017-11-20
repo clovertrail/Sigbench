@@ -1,21 +1,19 @@
 package sigbench
 
+import ()
 import (
-)
-import (
-	"time"
-	"log"
 	"fmt"
+	"log"
 	"microsoft.com/sigbench/sessions"
 	"sync"
+	"time"
 )
 
 type AgentController struct {
-
 }
 
 type AgentRunArgs struct {
-	Job Job
+	Job        Job
 	AgentCount int
 }
 
@@ -39,11 +37,12 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 			wg.Add(1)
 			go func(session sessions.Session) {
 				ctx := &sessions.SessionContext{
-					Phase: phase.Name,
+					Phase:  phase.Name,
+					Params: job.SessionParams,
 				}
 
 				// TODO: Check error
-				session.Execute(ctx);
+				session.Execute(ctx)
 
 				// Done for user
 				wg.Done()
@@ -56,7 +55,7 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 }
 
 func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error {
-	log.Println(args)
+	log.Println("Start run: ", args)
 	var wg sync.WaitGroup
 
 	for _, phase := range args.Job.Phases {
@@ -65,7 +64,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 
 		ticker := time.NewTicker(time.Second)
 		for now := range ticker.C {
-			if phase.Duration - now.Sub(start) <= 0 {
+			if phase.Duration-now.Sub(start) <= 0 {
 				ticker.Stop()
 				break
 			}
@@ -73,7 +72,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 			wg.Add(1)
 			go c.runPhase(&args.Job, &phase, args.AgentCount, &wg)
 
-			if phase.Duration - now.Sub(start) <= 0 {
+			if phase.Duration-now.Sub(start) <= 0 {
 				ticker.Stop()
 				break
 			}
@@ -82,15 +81,15 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 
 	wg.Wait()
 
+	log.Println("Finished run: ", args)
+
 	return nil
 }
 
 type AgentSetupArgs struct {
-
 }
 
 type AgentSetupResult struct {
-
 }
 
 func (c *AgentController) Setup(args *AgentSetupArgs, result *AgentSetupResult) error {

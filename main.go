@@ -1,15 +1,15 @@
 package main
 
 import (
-	"microsoft.com/sigbench"
-	"flag"
-	"net/rpc"
-	"net"
-	"log"
-	"net/http"
-	"strings"
 	"encoding/json"
+	"flag"
+	"log"
+	"microsoft.com/sigbench"
+	"net"
+	"net/http"
+	"net/rpc"
 	"os"
+	"strings"
 )
 
 func startAsMaster(agents []string, config string) {
@@ -92,8 +92,7 @@ func startAsMaster(agents []string, config string) {
 }
 
 func startAsAgent(address string) {
-	controller := &sigbench.AgentController{
-	}
+	controller := &sigbench.AgentController{}
 	rpc.Register(controller)
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", address)
@@ -119,4 +118,3 @@ func main() {
 		startAsAgent(*listenAddress)
 	}
 }
-
