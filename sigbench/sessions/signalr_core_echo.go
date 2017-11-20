@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -79,10 +80,10 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 	}
 	defer c.Close()
 
+	echoReceivedChan := make(chan struct{})
 	doneChan := make(chan struct{})
 
 	go func() {
-		defer c.Close()
 		defer close(doneChan)
 		for {
 			_, msgWithTerm, err := c.ReadMessage()
@@ -102,11 +103,7 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 			}
 
 			if content.Type == 1 && content.Target == "echo" && content.Arguments[1] == "foobar" {
-				err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-				if err != nil {
-					s.logError("Fail to close websocket gracefully", err)
-					return
-				}
+				close(echoReceivedChan)
 			}
 		}
 	}()
@@ -123,15 +120,29 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 		return err
 	}
 
+	// Wait echo response
 	select {
 	case <-time.After(1 * time.Minute):
 		s.logError("Fail to receive echo within timeout", nil)
+		return errors.New("fail to receive echo within timeout")
+	case <-echoReceivedChan:
+		// Gracefully close
+		err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		if err != nil {
+			s.logError("Fail to close websocket gracefully", err)
+			return err
+		}
+	}
+
+	// Wait close response
+	select {
+	case <-time.After(1 * time.Minute):
+		s.logError("Fail to receive close message", nil)
+		return errors.New("fail to receive close message")
 	case <-doneChan:
 		atomic.AddInt64(&s.cntSuccess, 1)
+		return nil
 	}
-	c.Close()
-
-	return nil
 }
 
 func (s *SignalRCoreEcho) Counters() map[string]int64 {

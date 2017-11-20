@@ -4,21 +4,32 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
-	"microsoft.com/sigbench"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
+	"strconv"
 	"strings"
+	"time"
+
+	"microsoft.com/sigbench"
+	"microsoft.com/sigbench/snapshot"
 )
 
-func startAsMaster(agents []string, config string) {
+func startAsMaster(agents []string, config string, outDir string) {
 	if len(agents) == 0 {
 		log.Fatalln("No agents specified")
 	}
 	log.Println("Agents: ", agents)
 
-	c := &sigbench.MasterController{}
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		log.Fatalln(err)
+	}
+	log.Println("Ouptut directory: ", outDir)
+
+	c := &sigbench.MasterController{
+		SnapshotWriter: snapshot.NewJsonSnapshotWriter(outDir + "/counters.txt"),
+	}
 
 	for _, agent := range agents {
 		c.RegisterAgent(agent)
@@ -105,6 +116,7 @@ func startAsAgent(address string) {
 func main() {
 	var isMaster = flag.Bool("master", false, "True if master")
 	var config = flag.String("config", "config.json", "Job config file")
+	var outDir = flag.String("outDir", "output/"+strconv.FormatInt(time.Now().Unix(), 10), "Output directory")
 	var listenAddress = flag.String("l", ":7000", "Listen address")
 	var agents = flag.String("agents", "", "Agent addresses separated by comma")
 
@@ -112,7 +124,7 @@ func main() {
 
 	if isMaster != nil && *isMaster {
 		log.Println("Start as master")
-		startAsMaster(strings.Split(*agents, ","), *config)
+		startAsMaster(strings.Split(*agents, ","), *config, *outDir)
 	} else {
 		log.Println("Start as agent: ", *listenAddress)
 		startAsAgent(*listenAddress)

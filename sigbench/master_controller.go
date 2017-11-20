@@ -1,18 +1,18 @@
 package sigbench
 
 import (
-// "errors"
-)
-import (
 	"log"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"microsoft.com/sigbench/snapshot"
 )
 
 type MasterController struct {
-	Agents []*AgentDelegate
+	Agents         []*AgentDelegate
+	SnapshotWriter snapshot.SnapshotWriter
 }
 
 func (c *MasterController) RegisterAgent(address string) error {
@@ -61,12 +61,18 @@ func (c *MasterController) collectCounters() map[string]int64 {
 
 func (c *MasterController) watchCounters(stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			c.printCounters(c.collectCounters())
+			counters := c.collectCounters()
+
+			if err := c.SnapshotWriter.WriteCounters(time.Now(), counters); err != nil {
+				log.Println("Error: fail to write counter snapshot: ", err)
+			}
+
+			c.printCounters(counters)
 		case <-stopChan:
-			ticker.Stop()
 			return
 		}
 	}
@@ -122,7 +128,9 @@ func (c *MasterController) Run(job *Job) error {
 	close(stopWatchCounterChan)
 
 	log.Println("--- Finished ---")
-	c.printCounters(c.collectCounters())
+	counters := c.collectCounters()
+	c.SnapshotWriter.WriteCounters(time.Now(), counters)
+	c.printCounters(counters)
 
 	return nil
 }

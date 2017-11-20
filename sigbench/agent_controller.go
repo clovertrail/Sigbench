@@ -4,9 +4,10 @@ import ()
 import (
 	"fmt"
 	"log"
-	"microsoft.com/sigbench/sessions"
 	"sync"
 	"time"
+
+	"microsoft.com/sigbench/sessions"
 )
 
 type AgentController struct {
