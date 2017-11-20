@@ -2,16 +2,17 @@ package main
 
 import (
 	"microsoft.com/sigbench"
-	"time"
 	"flag"
 	"net/rpc"
 	"net"
 	"log"
 	"net/http"
 	"strings"
+	"encoding/json"
+	"os"
 )
 
-func startAsMaster(agents []string) {
+func startAsMaster(agents []string, config string) {
 	if len(agents) == 0 {
 		log.Fatalln("No agents specified")
 	}
@@ -22,6 +23,18 @@ func startAsMaster(agents []string) {
 	for _, agent := range agents {
 		c.RegisterAgent(agent)
 	}
+
+	var job sigbench.Job
+	if f, err := os.Open(config); err == nil {
+		decoder := json.NewDecoder(f)
+		if err := decoder.Decode(&job); err != nil {
+			log.Fatalln("Fail to load config file: ", err)
+		}
+	} else {
+		log.Fatalln("Fail to open config file: ", err)
+	}
+
+	c.Run(&job)
 
 	// j := &sigbench.Job{
 	// 	Phases: []sigbench.JobPhase{
@@ -61,22 +74,21 @@ func startAsMaster(agents []string) {
 	// 	},
 	// }
 
-	j := &sigbench.Job{
-		Phases: []sigbench.JobPhase{
-			sigbench.JobPhase{
-				Name: "Echo",
-				UsersPerSecond: 1000,
-				Duration: 30 * time.Second,
-			},
-		},
-		SessionNames: []string{
-			"signalrcore:echo",
-		},
-		SessionPercentages: []float64{
-			1,
-		},
-	}
-	c.Run(j)
+	// j := &sigbench.Job{
+	// 	Phases: []sigbench.JobPhase{
+	// 		sigbench.JobPhase{
+	// 			Name: "Echo",
+	// 			UsersPerSecond: 1000,
+	// 			Duration: 30 * time.Second,
+	// 		},
+	// 	},
+	// 	SessionNames: []string{
+	// 		"signalrcore:echo",
+	// 	},
+	// 	SessionPercentages: []float64{
+	// 		1,
+	// 	},
+	// }
 }
 
 func startAsAgent(address string) {
@@ -93,6 +105,7 @@ func startAsAgent(address string) {
 
 func main() {
 	var isMaster = flag.Bool("master", false, "True if master")
+	var config = flag.String("config", "config.json", "Job config file")
 	var listenAddress = flag.String("l", ":7000", "Listen address")
 	var agents = flag.String("agents", "", "Agent addresses separated by comma")
 
@@ -100,7 +113,7 @@ func main() {
 
 	if isMaster != nil && *isMaster {
 		log.Println("Start as master")
-		startAsMaster(strings.Split(*agents, ","))
+		startAsMaster(strings.Split(*agents, ","), *config)
 	} else {
 		log.Println("Start as agent: ", *listenAddress)
 		startAsAgent(*listenAddress)
