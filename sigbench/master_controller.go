@@ -27,7 +27,7 @@ func (c *MasterController) setupAllAgents() error {
 
 	for _, agent := range c.Agents {
 		wg.Add(1)
-		go func() {
+		go func(agent *AgentDelegate) {
 			args := &AgentSetupArgs{}
 			var result AgentSetupResult
 			if err := agent.Client.Call("AgentController.Setup", args, &result); err != nil {
@@ -35,7 +35,7 @@ func (c *MasterController) setupAllAgents() error {
 				log.Fatalln(err)
 			}
 			wg.Done()
-		}()
+		}(agent)
 	}
 
 	wg.Wait()
@@ -81,7 +81,7 @@ func (c *MasterController) Run(job *Job) error {
 
 	for _, agent := range c.Agents {
 		wg.Add(1)
-		go func() {
+		go func(agent *AgentDelegate) {
 			args := &AgentRunArgs{
 				Job: *job,
 				AgentCount: agentCount,
@@ -93,7 +93,7 @@ func (c *MasterController) Run(job *Job) error {
 			}
 
 			wg.Done()
-		}();
+		}(agent);
 	}
 
 	stopWatchCounterChan := make(chan bool)

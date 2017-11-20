@@ -37,7 +37,7 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 
 		for i := int64(0); i < sessionUsers; i++ {
 			wg.Add(1)
-			go func() {
+			go func(session sessions.Session) {
 				ctx := &sessions.SessionContext{
 					Phase: phase.Name,
 				}
@@ -47,7 +47,7 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 
 				// Done for user
 				wg.Done()
-			}()
+			}(session)
 		}
 	}
 
