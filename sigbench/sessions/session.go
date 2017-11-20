@@ -15,6 +15,7 @@ type Session interface {
 var SessionMap = map[string]Session{
 	"dummy": &DummySession{},
 	"http-get": &HttpGetSession{},
+	"signalrcore:echo": &SignalRCoreEcho{},
 }
 
 type DummySession struct {

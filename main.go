@@ -44,16 +44,33 @@ func startAsMaster(agents []string) {
 	// 	},
 	// }
 
+	// HTTP
+	// j := &sigbench.Job{
+	// 	Phases: []sigbench.JobPhase{
+	// 		sigbench.JobPhase{
+	// 			Name: "Get",
+	// 			UsersPerSecond: 10,
+	// 			Duration: 10 * time.Second,
+	// 		},
+	// 	},
+	// 	SessionNames: []string{
+	// 		"http-get",
+	// 	},
+	// 	SessionPercentages: []float64{
+	// 		1,
+	// 	},
+	// }
+
 	j := &sigbench.Job{
 		Phases: []sigbench.JobPhase{
 			sigbench.JobPhase{
-				Name: "Get",
-				UsersPerSecond: 10,
+				Name: "Echo",
+				UsersPerSecond: 1000,
 				Duration: 10 * time.Second,
 			},
 		},
 		SessionNames: []string{
-			"http-get",
+			"signalrcore:echo",
 		},
 		SessionPercentages: []float64{
 			1,
