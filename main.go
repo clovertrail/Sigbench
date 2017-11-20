@@ -8,12 +8,20 @@ import (
 	"net"
 	"log"
 	"net/http"
+	"strings"
 )
 
-func startAsMaster() {
+func startAsMaster(agents []string) {
+	if len(agents) == 0 {
+		log.Fatalln("No agents specified")
+	}
+	log.Println("Agents: ", agents)
+
 	c := &sigbench.MasterController{}
-	c.RegisterAgent("localhost:7000")
-	c.RegisterAgent("localhost:7001")
+
+	for _, agent := range agents {
+		c.RegisterAgent(agent)
+	}
 
 	// j := &sigbench.Job{
 	// 	Phases: []sigbench.JobPhase{
@@ -69,12 +77,13 @@ func startAsAgent(address string) {
 func main() {
 	var isMaster = flag.Bool("master", false, "True if master")
 	var listenAddress = flag.String("l", ":7000", "Listen address")
+	var agents = flag.String("agents", "", "Agent addresses separated by comma")
 
 	flag.Parse()
 
 	if isMaster != nil && *isMaster {
 		log.Println("Start as master")
-		startAsMaster()
+		startAsMaster(strings.Split(*agents, ","))
 	} else {
 		log.Println("Start as agent: ", *listenAddress)
 		startAsAgent(*listenAddress)
