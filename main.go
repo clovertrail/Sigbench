@@ -66,7 +66,7 @@ func startAsMaster(agents []string) {
 			sigbench.JobPhase{
 				Name: "Echo",
 				UsersPerSecond: 1000,
-				Duration: 10 * time.Second,
+				Duration: 30 * time.Second,
 			},
 		},
 		SessionNames: []string{

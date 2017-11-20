@@ -7,6 +7,8 @@ import (
 	"sync"
 	"log"
 	"time"
+	"strconv"
+	"sort"
 )
 
 type MasterController struct {
@@ -62,11 +64,27 @@ func (c *MasterController) watchCounters(stopChan chan bool) {
 	for {
 		select {
 		case <- ticker.C:
-			log.Println("Counters: ", c.collectCounters())
+			c.printCounters(c.collectCounters())
 		case <- stopChan:
 			ticker.Stop()
 			return
 		}
+	}
+}
+
+func (c *MasterController) printCounters(counters map[string]int64) {
+	table := make([][2]string, 0, len(counters))
+	for k, v := range counters {
+		table = append(table, [2]string{k, strconv.FormatInt(v, 10)})
+	}
+
+	sort.Slice(table, func(i, j int) bool {
+		return table[i][0] < table[j][0]
+	})
+
+	log.Println("Counters:")
+	for _, row := range table {
+		log.Println("    ", row[0], ": ", row[1])
 	}
 }
 
@@ -103,7 +121,8 @@ func (c *MasterController) Run(job *Job) error {
 
 	stopWatchCounterChan <- true
 
-	log.Println("Final counters: ", c.collectCounters())
+	log.Println("--- Finished ---")
+	c.printCounters(c.collectCounters())
 
 	return nil;
 }
