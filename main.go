@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ func startAsMaster(agents []string, config string, outDir string) {
 	}
 	log.Println("Agents: ", agents)
 
+	// Create output directory
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Fatalln(err)
 	}
@@ -32,7 +34,9 @@ func startAsMaster(agents []string, config string, outDir string) {
 	}
 
 	for _, agent := range agents {
-		c.RegisterAgent(agent)
+		if err := c.RegisterAgent(agent); err != nil {
+			log.Fatalln("Fail to register agent: ", agent, err)
+		}
 	}
 
 	var job sigbench.Job
@@ -40,6 +44,15 @@ func startAsMaster(agents []string, config string, outDir string) {
 		decoder := json.NewDecoder(f)
 		if err := decoder.Decode(&job); err != nil {
 			log.Fatalln("Fail to load config file: ", err)
+		}
+
+		// Make a copy of config file to output directory
+		copy, err := json.MarshalIndent(job, "", "    ")
+		if err != nil {
+			log.Fatalln("Fail to encode a copy of config file: ", err)
+		}
+		if err := ioutil.WriteFile(outDir+"/config.json", copy, 0644); err != nil {
+			log.Fatalln("Fail to save a copy of config file: ", err)
 		}
 	} else {
 		log.Fatalln("Fail to open config file: ", err)

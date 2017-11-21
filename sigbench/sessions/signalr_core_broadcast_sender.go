@@ -66,7 +66,12 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
 	host := ctx.Params[ParamHost]
-	broadcastCount := 10
+	broadcastDurationSecs := 10
+	if secsStr, ok := ctx.Params[ParamBroadcastDurationSecs]; ok {
+		if secs, err := strconv.Atoi(secsStr); err == nil {
+			broadcastDurationSecs = secs
+		}
+	}
 
 	handshakeReq, err := http.NewRequest(http.MethodOptions, "http://"+host+"/chat", nil)
 	if err != nil {
@@ -98,7 +103,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 	defer c.Close()
 
 	closeChan := make(chan struct{})
-	recvChan := make(chan int64, broadcastCount)
+	recvChan := make(chan int64, broadcastDurationSecs)
 
 	go func() {
 		defer c.Close()
@@ -140,7 +145,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 		return err
 	}
 
-	for i := 0; i < broadcastCount; i++ {
+	for i := 0; i < broadcastDurationSecs; i++ {
 		// Send message
 		msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
 			Type:         1,
@@ -169,7 +174,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 	}
 
 	timeoutChan := time.After(time.Minute)
-	for i := 0; i < broadcastCount; i++ {
+	for i := 0; i < broadcastDurationSecs; i++ {
 		select {
 		case latency := <-recvChan:
 			s.logLatency(latency)
