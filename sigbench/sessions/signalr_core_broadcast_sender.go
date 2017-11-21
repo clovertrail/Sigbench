@@ -43,13 +43,13 @@ func (s *SignalRCoreBroadcastSender) Setup() error {
 	return nil
 }
 
-func (s *SignalRCoreBroadcastSender) logError(msg string, err error) {
-	log.Println("Error: ", msg, " due to ", err)
+func (s *SignalRCoreBroadcastSender) logError(ctx *UserContext, msg string, err error) {
+	log.Printf("[Error][%s] %s due to %s", ctx.UserId, msg, err)
 	atomic.AddInt64(&s.cntError, 1)
 }
 
 func (s *SignalRCoreBroadcastSender) logLatency(latency int64) {
-	log.Println("Latency: ", latency)
+	// log.Println("Latency: ", latency)
 	if latency < 100 {
 		atomic.AddInt64(&s.cntLatencyLessThan100ms, 1)
 	} else if latency < 500 {
@@ -61,7 +61,7 @@ func (s *SignalRCoreBroadcastSender) logLatency(latency int64) {
 	}
 }
 
-func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
+func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
@@ -70,13 +70,13 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 
 	handshakeReq, err := http.NewRequest(http.MethodOptions, "http://"+host+"/chat", nil)
 	if err != nil {
-		s.logError("Fail to construct handshake request", err)
+		s.logError(ctx, "Fail to construct handshake request", err)
 		return err
 	}
 
 	handshakeResp, err := http.DefaultClient.Do(handshakeReq)
 	if err != nil {
-		s.logError("Fail to obtain connection id", err)
+		s.logError(ctx, "Fail to obtain connection id", err)
 		return err
 	}
 	defer handshakeResp.Body.Close()
@@ -85,14 +85,14 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 	var handshakeContent SignalRCoreHandshakeResp
 	err = decoder.Decode(&handshakeContent)
 	if err != nil {
-		s.logError("Fail to decode connection id", err)
+		s.logError(ctx, "Fail to decode connection id", err)
 		return err
 	}
 
 	wsUrl := "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
 	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {
-		s.logError("Fail to connect to websocket", err)
+		s.logError(ctx, "Fail to connect to websocket", err)
 		return err
 	}
 	defer c.Close()
@@ -100,7 +100,6 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 	closeChan := make(chan struct{})
 	recvChan := make(chan int64, broadcastCount)
 
-	userId := strconv.FormatInt(time.Now().Unix(), 10)
 	go func() {
 		defer c.Close()
 		defer close(closeChan)
@@ -108,7 +107,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 			_, msgWithTerm, err := c.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
-					s.logError("Fail to read incoming message", err)
+					s.logError(ctx, "Fail to read incoming message", err)
 				}
 				return
 			}
@@ -117,16 +116,16 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 			var content SignalRCoreInvocation
 			err = json.Unmarshal(msg, &content)
 			if err != nil {
-				s.logError("Fail to decode incoming message", err)
+				s.logError(ctx, "Fail to decode incoming message", err)
 				return
 			}
 
 			atomic.AddInt64(&s.cntMessagesRecv, 1)
 
-			if content.Type == 1 && content.Target == "broadcastMessage" && content.Arguments[0] == userId {
+			if content.Type == 1 && content.Target == "broadcastMessage" && content.Arguments[0] == ctx.UserId {
 				sendStart, err := strconv.ParseInt(content.Arguments[1], 10, 64)
 				if err != nil {
-					s.logError("Fail to decode start timestamp", err)
+					s.logError(ctx, "Fail to decode start timestamp", err)
 					continue
 				}
 
@@ -137,7 +136,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 
 	err = c.WriteMessage(websocket.TextMessage, []byte("{\"protocol\":\"json\"}\x1e"))
 	if err != nil {
-		s.logError("Fail to set protocol", err)
+		s.logError(ctx, "Fail to set protocol", err)
 		return err
 	}
 
@@ -148,19 +147,19 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 			InvocationId: "0",
 			Target:       "send",
 			Arguments: []string{
-				userId,
+				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
 			},
 			NonBlocking: false,
 		})
 		if err != nil {
-			s.logError("Fail to serialize signalr core message", err)
+			s.logError(ctx, "Fail to serialize signalr core message", err)
 			return err
 		}
 
 		err = c.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
-			s.logError("Fail to send broadcast message", err)
+			s.logError(ctx, "Fail to send broadcast message", err)
 			return err
 		}
 
@@ -175,7 +174,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 		case latency := <-recvChan:
 			s.logLatency(latency)
 		case <-timeoutChan:
-			s.logError("Fail to receive all self broadcast messages within timeout", nil)
+			s.logError(ctx, "Fail to receive all self broadcast messages within timeout", nil)
 			return errors.New("fail receive all self broadcast messages within timeout")
 			break
 		}
@@ -183,7 +182,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *SessionContext) error {
 
 	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
-		s.logError("Fail to close websocket gracefully", err)
+		s.logError(ctx, "Fail to close websocket gracefully", err)
 		return err
 	}
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/teris-io/shortid"
 	"microsoft.com/sigbench/sessions"
 )
 
@@ -37,7 +38,17 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 		for i := int64(0); i < sessionUsers; i++ {
 			wg.Add(1)
 			go func(session sessions.Session) {
-				ctx := &sessions.SessionContext{
+				// Done for user
+				defer wg.Done()
+
+				uid, err := shortid.Generate()
+				if err != nil {
+					log.Println("Error: fail to generate uid due to", err)
+					return
+				}
+
+				ctx := &sessions.UserContext{
+					UserId: uid,
 					Phase:  phase.Name,
 					Params: job.SessionParams,
 				}
@@ -45,8 +56,6 @@ func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg
 				// TODO: Check error
 				session.Execute(ctx)
 
-				// Done for user
-				wg.Done()
 			}(session)
 		}
 	}

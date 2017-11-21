@@ -8,7 +8,7 @@ import (
 type Session interface {
 	Name() string
 	Setup() error
-	Execute(*SessionContext) error
+	Execute(*UserContext) error
 	Counters() map[string]int64
 }
 
@@ -33,7 +33,7 @@ func (s *DummySession) Setup() error {
 	return nil
 }
 
-func (s *DummySession) Execute(ctx *SessionContext) error {
+func (s *DummySession) Execute(ctx *UserContext) error {
 	log.Println("> Dummy at phase: " + ctx.Phase)
 	atomic.AddInt64(&s.counterA, 1)
 	atomic.AddInt64(&s.counterB, 2)

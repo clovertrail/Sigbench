@@ -24,7 +24,7 @@ func (s *HttpGetSession) Setup() error {
 	return nil
 }
 
-func (s *HttpGetSession) Execute(ctx *SessionContext) error {
+func (s *HttpGetSession) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.counterInitiated, 1)
 
 	resp, err := http.Get("https://www.baidu.com")

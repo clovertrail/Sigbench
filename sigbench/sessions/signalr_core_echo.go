@@ -33,7 +33,7 @@ func (s *SignalRCoreEcho) logError(msg string, err error) {
 	atomic.AddInt64(&s.cntError, 1)
 }
 
-func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
+func (s *SignalRCoreEcho) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
