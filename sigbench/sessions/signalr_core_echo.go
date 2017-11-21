@@ -28,19 +28,6 @@ func (s *SignalRCoreEcho) Setup() error {
 	return nil
 }
 
-type SignalRCoreHandshakeResp struct {
-	AvailableTransports []string `json:"availableTransports"`
-	ConnectionId        string   `json:"connectionId"`
-}
-
-type SignalRCoreServerInvocation struct {
-	InvocationId string   `json:"invocationId"`
-	Type         int      `json:"type"`
-	Target       string   `json:"target"`
-	NonBlocking  bool     `json:"nonBlocking"`
-	Arguments    []string `json:"arguments"`
-}
-
 func (s *SignalRCoreEcho) logError(msg string, err error) {
 	log.Println("Error: ", msg, " due to ", err)
 	atomic.AddInt64(&s.cntError, 1)
@@ -75,7 +62,7 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 	wsUrl := "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
 	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {
-		s.logError("Fail to connect to websocekt", err)
+		s.logError("Fail to connect to websocket", err)
 		return err
 	}
 	defer c.Close()
@@ -95,7 +82,7 @@ func (s *SignalRCoreEcho) Execute(ctx *SessionContext) error {
 			}
 
 			msg := msgWithTerm[:len(msgWithTerm)-1]
-			var content SignalRCoreServerInvocation
+			var content SignalRCoreInvocation
 			err = json.Unmarshal(msg, &content)
 			if err != nil {
 				s.logError("Fail to decode incoming message", err)
