@@ -98,6 +98,7 @@ func (c *MasterController) Run(job *Job) error {
 	// TODO: Validate job
 	var wg sync.WaitGroup
 	var agentCount int = len(c.Agents)
+	var timeStart time.Time = time.Now()
 
 	if err := c.setupAllAgents(); err != nil {
 		return err
@@ -131,6 +132,9 @@ func (c *MasterController) Run(job *Job) error {
 	counters := c.collectCounters()
 	c.SnapshotWriter.WriteCounters(time.Now(), counters)
 	c.printCounters(counters)
+
+	totalDuration := int64(time.Now().Sub(timeStart) / time.Second)
+	log.Println("Test duration:", totalDuration, "secs")
 
 	return nil
 }

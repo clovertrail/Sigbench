@@ -26,6 +26,7 @@ type SignalRFxServerMessageFrame struct {
 type SignalRFxServerMessage struct {
 	C      string                        `json:"C"`
 	S      int                           `json:"S"`
+	Id     string                        `json:"I"`
 	Frames []SignalRFxServerMessageFrame `json:"M"`
 }
 

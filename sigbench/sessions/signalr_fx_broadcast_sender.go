@@ -20,6 +20,7 @@ type SignalRFxBroadcastSender struct {
 	cntSuccess               int64
 	cntMessagesRecv          int64
 	cntMessagesSend          int64
+	cntMessagesSendAck       int64
 	cntLatencyLessThan100ms  int64
 	cntLatencyLessThan500ms  int64
 	cntLatencyLessThan1000ms int64
@@ -37,6 +38,7 @@ func (s *SignalRFxBroadcastSender) Setup() error {
 	s.cntSuccess = 0
 	s.cntMessagesRecv = 0
 	s.cntMessagesSend = 0
+	s.cntMessagesSendAck = 0
 	s.cntLatencyLessThan100ms = 0
 	s.cntLatencyLessThan500ms = 0
 	s.cntLatencyLessThan1000ms = 0
@@ -121,8 +123,6 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 				return
 			}
 
-			log.Printf("[%s]msg: %s", ctx.UserId, string(msg))
-
 			var content SignalRFxServerMessage
 			err = json.Unmarshal(msg, &content)
 			if err != nil {
@@ -135,6 +135,12 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 			// Init message
 			if content.S == 1 {
 				close(connectChan)
+				continue
+			}
+
+			// Ack message
+			if content.Id != "" {
+				atomic.AddInt64(&s.cntMessagesSendAck, 1)
 				continue
 			}
 
@@ -193,8 +199,6 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 
 	// Now we can send messages
 	for i := 0; i < broadcastDurationSecs; i++ {
-		log.Printf("[%s]send: %d", ctx.UserId, i)
-
 		// Send message
 		msg, err := json.Marshal(&SignalRFxClientMessage{
 			Id:     i,
@@ -253,15 +257,16 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 
 func (s *SignalRFxBroadcastSender) Counters() map[string]int64 {
 	return map[string]int64{
-		"signalrfx:broadcast:inprogress":     atomic.LoadInt64(&s.cntInProgress),
-		"signalrfx:broadcast:success":        atomic.LoadInt64(&s.cntSuccess),
-		"signalrfx:broadcast:error":          atomic.LoadInt64(&s.cntError),
-		"signalrfx:broadcast:closeerror":     atomic.LoadInt64(&s.cntCloseError),
-		"signalrfx:broadcast:messages:recv":  atomic.LoadInt64(&s.cntMessagesRecv),
-		"signalrfx:broadcast:messages:send":  atomic.LoadInt64(&s.cntMessagesSend),
-		"signalrfx:broadcast:latency:<100":   atomic.LoadInt64(&s.cntLatencyLessThan100ms),
-		"signalrfx:broadcast:latency:<500":   atomic.LoadInt64(&s.cntLatencyLessThan500ms),
-		"signalrfx:broadcast:latency:<1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
-		"signalrfx:broadcast:latency:>=1000": atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
+		"signalrfx:broadcast:inprogress":       atomic.LoadInt64(&s.cntInProgress),
+		"signalrfx:broadcast:success":          atomic.LoadInt64(&s.cntSuccess),
+		"signalrfx:broadcast:error":            atomic.LoadInt64(&s.cntError),
+		"signalrfx:broadcast:closeerror":       atomic.LoadInt64(&s.cntCloseError),
+		"signalrfx:broadcast:messages:recv":    atomic.LoadInt64(&s.cntMessagesRecv),
+		"signalrfx:broadcast:messages:send":    atomic.LoadInt64(&s.cntMessagesSend),
+		"signalrfx:broadcast:messages:sendack": atomic.LoadInt64(&s.cntMessagesSendAck),
+		"signalrfx:broadcast:latency:<100":     atomic.LoadInt64(&s.cntLatencyLessThan100ms),
+		"signalrfx:broadcast:latency:<500":     atomic.LoadInt64(&s.cntLatencyLessThan500ms),
+		"signalrfx:broadcast:latency:<1000":    atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
+		"signalrfx:broadcast:latency:>=1000":   atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
 	}
 }
