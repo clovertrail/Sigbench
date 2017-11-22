@@ -15,6 +15,7 @@ type Session interface {
 var SessionMap = map[string]Session{
 	"signalrcore:echo":             &SignalRCoreEcho{},
 	"signalrcore:broadcast:sender": &SignalRCoreBroadcastSender{},
+	"signalrfx:broadcast:sender":   &SignalRFxBroadcastSender{},
 }
 
 type DummySession struct {
