@@ -44,10 +44,12 @@ func (c *MasterController) setupAllAgents() error {
 	return nil
 }
 
-func (c *MasterController) collectCounters() map[string]int64 {
+func (c *MasterController) collectCounters(sessionNames []string) map[string]int64 {
 	counters := make(map[string]int64)
 	for _, agent := range c.Agents {
-		args := &AgentListCountersArgs{}
+		args := &AgentListCountersArgs{
+			SessionNames: sessionNames,
+		}
 		var result AgentListCountersResult
 		if err := agent.Client.Call("AgentController.ListCounters", args, &result); err != nil {
 			log.Println("ERROR: Fail to list counters from agent:", agent.Address, err)
@@ -59,13 +61,13 @@ func (c *MasterController) collectCounters() map[string]int64 {
 	return counters
 }
 
-func (c *MasterController) watchCounters(stopChan chan struct{}) {
+func (c *MasterController) watchCounters(sessionNames []string, stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			counters := c.collectCounters()
+			counters := c.collectCounters(sessionNames)
 
 			if err := c.SnapshotWriter.WriteCounters(time.Now(), counters); err != nil {
 				log.Println("Error: fail to write counter snapshot: ", err)
@@ -122,14 +124,14 @@ func (c *MasterController) Run(job *Job) error {
 	}
 
 	stopWatchCounterChan := make(chan struct{})
-	go c.watchCounters(stopWatchCounterChan)
+	go c.watchCounters(job.SessionNames, stopWatchCounterChan)
 
 	wg.Wait()
 
 	close(stopWatchCounterChan)
 
 	log.Println("--- Finished ---")
-	counters := c.collectCounters()
+	counters := c.collectCounters(job.SessionNames)
 	c.SnapshotWriter.WriteCounters(time.Now(), counters)
 	c.printCounters(counters)
 

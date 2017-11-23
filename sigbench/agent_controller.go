@@ -113,6 +113,7 @@ func (c *AgentController) Setup(args *AgentSetupArgs, result *AgentSetupResult) 
 }
 
 type AgentListCountersArgs struct {
+	SessionNames []string
 }
 
 type AgentListCountersResult struct {
@@ -121,10 +122,12 @@ type AgentListCountersResult struct {
 
 func (c *AgentController) ListCounters(args *AgentListCountersArgs, result *AgentListCountersResult) error {
 	result.Counters = make(map[string]int64)
-	for _, session := range sessions.SessionMap {
-		counters := session.Counters()
-		for k, v := range counters {
-			result.Counters[k] = result.Counters[k] + v
+	for _, sessionName := range args.SessionNames {
+		if session, ok := sessions.SessionMap[sessionName]; ok {
+			counters := session.Counters()
+			for k, v := range counters {
+				result.Counters[k] = result.Counters[k] + v
+			}
 		}
 	}
 	return nil
