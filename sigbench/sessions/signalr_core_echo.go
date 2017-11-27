@@ -21,7 +21,7 @@ func (s *SignalRCoreEcho) Name() string {
 	return "SignalRCore:Echo"
 }
 
-func (s *SignalRCoreEcho) Setup() error {
+func (s *SignalRCoreEcho) Setup(map[string]string) error {
 	s.cntInProgress = 0
 	s.cntError = 0
 	s.cntSuccess = 0

@@ -15,6 +15,7 @@ import (
 
 type SignalRFxBroadcastSender struct {
 	cntInProgress            int64
+	cntConnected             int64
 	cntError                 int64
 	cntCloseError            int64
 	cntSuccess               int64
@@ -31,9 +32,10 @@ func (s *SignalRFxBroadcastSender) Name() string {
 	return "SignalRFx:Broadcast:Sender"
 }
 
-func (s *SignalRFxBroadcastSender) Setup() error {
+func (s *SignalRFxBroadcastSender) Setup(map[string]string) error {
 	s.cntInProgress = 0
 	s.cntError = 0
+	s.cntConnected = 0
 	s.cntCloseError = 0
 	s.cntSuccess = 0
 	s.cntMessagesRecv = 0
@@ -197,6 +199,9 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 		return err
 	}
 
+	atomic.AddInt64(&s.cntConnected, 1)
+	defer atomic.AddInt64(&s.cntConnected, -1)
+
 	// Now we can send messages
 	for i := 0; i < broadcastDurationSecs; i++ {
 		// Send message
@@ -258,6 +263,7 @@ func (s *SignalRFxBroadcastSender) Execute(ctx *UserContext) error {
 func (s *SignalRFxBroadcastSender) Counters() map[string]int64 {
 	return map[string]int64{
 		"signalrfx:broadcast:inprogress":       atomic.LoadInt64(&s.cntInProgress),
+		"signalrfx:broadcast:connected":        atomic.LoadInt64(&s.cntConnected),
 		"signalrfx:broadcast:success":          atomic.LoadInt64(&s.cntSuccess),
 		"signalrfx:broadcast:error":            atomic.LoadInt64(&s.cntError),
 		"signalrfx:broadcast:closeerror":       atomic.LoadInt64(&s.cntCloseError),

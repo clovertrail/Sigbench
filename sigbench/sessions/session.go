@@ -7,7 +7,7 @@ import (
 
 type Session interface {
 	Name() string
-	Setup() error
+	Setup(sessionParams map[string]string) error
 	Execute(*UserContext) error
 	Counters() map[string]int64
 }
@@ -16,6 +16,7 @@ var SessionMap = map[string]Session{
 	"signalrcore:echo":             &SignalRCoreEcho{},
 	"signalrcore:broadcast:sender": &SignalRCoreBroadcastSender{},
 	"signalrfx:broadcast:sender":   &SignalRFxBroadcastSender{},
+	"redis:pubsub":                 &RedisPubSub{},
 }
 
 type DummySession struct {
@@ -27,7 +28,7 @@ func (s *DummySession) Name() string {
 	return "Dummy"
 }
 
-func (s *DummySession) Setup() error {
+func (s *DummySession) Setup(map[string]string) error {
 	log.Println("> Dummy setup")
 	s.counterA = 0
 	s.counterB = 0

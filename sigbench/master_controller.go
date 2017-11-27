@@ -24,13 +24,15 @@ func (c *MasterController) RegisterAgent(address string) error {
 	}
 }
 
-func (c *MasterController) setupAllAgents() error {
+func (c *MasterController) setupAllAgents(job *Job) error {
 	var wg sync.WaitGroup
 
 	for _, agent := range c.Agents {
 		wg.Add(1)
 		go func(agent *AgentDelegate) {
-			args := &AgentSetupArgs{}
+			args := &AgentSetupArgs{
+				SessionParams: job.SessionParams,
+			}
 			var result AgentSetupResult
 			if err := agent.Client.Call("AgentController.Setup", args, &result); err != nil {
 				// TODO: Report error
@@ -102,7 +104,7 @@ func (c *MasterController) Run(job *Job) error {
 	var agentCount int = len(c.Agents)
 	var timeStart time.Time = time.Now()
 
-	if err := c.setupAllAgents(); err != nil {
+	if err := c.setupAllAgents(job); err != nil {
 		return err
 	}
 

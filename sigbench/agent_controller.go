@@ -97,6 +97,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 }
 
 type AgentSetupArgs struct {
+	SessionParams map[string]string
 }
 
 type AgentSetupResult struct {
@@ -104,7 +105,7 @@ type AgentSetupResult struct {
 
 func (c *AgentController) Setup(args *AgentSetupArgs, result *AgentSetupResult) error {
 	for _, session := range sessions.SessionMap {
-		if err := session.Setup(); err != nil {
+		if err := session.Setup(args.SessionParams); err != nil {
 			return err
 		}
 	}

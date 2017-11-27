@@ -14,6 +14,7 @@ import (
 
 type SignalRCoreBroadcastSender struct {
 	cntInProgress            int64
+	cntConnected             int64
 	cntError                 int64
 	cntCloseError            int64
 	cntSuccess               int64
@@ -29,8 +30,9 @@ func (s *SignalRCoreBroadcastSender) Name() string {
 	return "SignalRCore:Broadcast:Sender"
 }
 
-func (s *SignalRCoreBroadcastSender) Setup() error {
+func (s *SignalRCoreBroadcastSender) Setup(map[string]string) error {
 	s.cntInProgress = 0
+	s.cntConnected = 0
 	s.cntError = 0
 	s.cntCloseError = 0
 	s.cntSuccess = 0
@@ -145,6 +147,9 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 		return err
 	}
 
+	atomic.AddInt64(&s.cntConnected, 1)
+	defer atomic.AddInt64(&s.cntConnected, -1)
+
 	for i := 0; i < broadcastDurationSecs; i++ {
 		// Send message
 		msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
@@ -206,6 +211,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 func (s *SignalRCoreBroadcastSender) Counters() map[string]int64 {
 	return map[string]int64{
 		"signalrcore:broadcast:inprogress":     atomic.LoadInt64(&s.cntInProgress),
+		"signalrcore:broadcast:connected":      atomic.LoadInt64(&s.cntConnected),
 		"signalrcore:broadcast:success":        atomic.LoadInt64(&s.cntSuccess),
 		"signalrcore:broadcast:error":          atomic.LoadInt64(&s.cntError),
 		"signalrcore:broadcast:closeerror":     atomic.LoadInt64(&s.cntCloseError),
