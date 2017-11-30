@@ -1,7 +1,8 @@
 package sessions
 
 const (
-	ParamHost = "host"
-	ParamPassword = "password"
+	ParamHost                  = "host"
+	ParamPassword              = "password"
 	ParamBroadcastDurationSecs = "broadcastDurationSecs"
+	ParamPublishInterval       = "publishInterval"
 )

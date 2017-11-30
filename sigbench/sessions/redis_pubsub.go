@@ -17,6 +17,7 @@ type RedisPubSub struct {
 	cntInProgress            int64
 	cntConnected             int64
 	cntError                 int64
+	cntErrorNotRecvAll       int64
 	cntSuccess               int64
 	cntMessagesRecv          int64
 	cntMessagesSend          int64
@@ -43,6 +44,7 @@ func (s *RedisPubSub) Setup(sessionParams map[string]string) error {
 	s.cntInProgress = 0
 	s.cntConnected = 0
 	s.cntError = 0
+	s.cntErrorNotRecvAll = 0
 	s.cntSuccess = 0
 	s.cntMessagesRecv = 0
 	s.cntMessagesSend = 0
@@ -113,9 +115,15 @@ func (s *RedisPubSub) Execute(ctx *UserContext) error {
 			broadcastDurationSecs = secs
 		}
 	}
+	publishInterval, err := strconv.Atoi(ctx.Params[ParamPublishInterval])
+	if err != nil {
+		s.logError(ctx, "Invalid publish interval", err)
+		return err
+	}
+	totalMsgCnt := broadcastDurationSecs * 1000 * 1000 / publishInterval
 
 	startChan := make(chan struct{})
-	recvChan := make(chan int64, broadcastDurationSecs)
+	recvChan := make(chan int64, totalMsgCnt)
 	exit := int64(0)
 
 	go func() {
@@ -156,13 +164,10 @@ func (s *RedisPubSub) Execute(ctx *UserContext) error {
 
 	<-startChan
 
-	pconn := s.pool.Get()
-	defer pconn.Close()
-
 	atomic.AddInt64(&s.cntConnected, 1)
 	defer atomic.AddInt64(&s.cntConnected, -1)
 
-	for i := 0; i < broadcastDurationSecs; i++ {
+	for i := 0; i < totalMsgCnt; i++ {
 		msg := &RedisPubSubMessage{
 			Uid:       ctx.UserId,
 			Timestamp: time.Now().UnixNano(),
@@ -174,29 +179,34 @@ func (s *RedisPubSub) Execute(ctx *UserContext) error {
 			return err
 		}
 
+		pconn := s.pool.Get()
 		_, err = pconn.Do("PUBLISH", "sigbench", msgEncoded)
 		if err != nil {
 			s.logError(ctx, "Fail to publish message", err)
+			pconn.Close()
 			return err
 		}
+		pconn.Flush()
+		pconn.Close()
 
 		atomic.AddInt64(&s.cntMessagesSend, 1)
 
-		time.Sleep(time.Second)
+		time.Sleep(time.Duration(publishInterval) * time.Microsecond)
 	}
 
+	defer atomic.StoreInt64(&exit, 1)
+
 	timeoutChan := time.After(time.Minute)
-	for i := 0; i < broadcastDurationSecs; i++ {
+	for i := 0; i < totalMsgCnt; i++ {
 		select {
 		case latency := <-recvChan:
 			s.logLatency(latency)
 		case <-timeoutChan:
-			s.logError(ctx, "Fail to receive all self broadcast messages within timeout", nil)
-			return errors.New("fail receive all self broadcast messages within timeout")
+			log.Printf("[Error][%s] Fail to receive all messages within timeout. Current i: %d", ctx.UserId, i)
+			atomic.AddInt64(&s.cntErrorNotRecvAll, 1)
+			return errors.New("fail to receive all messages within timeout")
 		}
 	}
-
-	atomic.StoreInt64(&exit, 1)
 
 	atomic.AddInt64(&s.cntSuccess, 1)
 
@@ -205,15 +215,16 @@ func (s *RedisPubSub) Execute(ctx *UserContext) error {
 
 func (s *RedisPubSub) Counters() map[string]int64 {
 	return map[string]int64{
-		"redis:pubsub:inprogress":     atomic.LoadInt64(&s.cntInProgress),
-		"redis:pubsub:connected":      atomic.LoadInt64(&s.cntConnected),
-		"redis:pubsub:success":        atomic.LoadInt64(&s.cntSuccess),
-		"redis:pubsub:error":          atomic.LoadInt64(&s.cntError),
-		"redis:pubsub:messages:recv":  atomic.LoadInt64(&s.cntMessagesRecv),
-		"redis:pubsub:messages:send":  atomic.LoadInt64(&s.cntMessagesSend),
-		"redis:pubsub:latency:<100":   atomic.LoadInt64(&s.cntLatencyLessThan100ms),
-		"redis:pubsub:latency:<500":   atomic.LoadInt64(&s.cntLatencyLessThan500ms),
-		"redis:pubsub:latency:<1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
-		"redis:pubsub:latency:>=1000": atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
+		"redis:pubsub:inprogress":       atomic.LoadInt64(&s.cntInProgress),
+		"redis:pubsub:connected":        atomic.LoadInt64(&s.cntConnected),
+		"redis:pubsub:success":          atomic.LoadInt64(&s.cntSuccess),
+		"redis:pubsub:error":            atomic.LoadInt64(&s.cntError),
+		"redis:pubsub:error:notrecvall": atomic.LoadInt64(&s.cntErrorNotRecvAll),
+		"redis:pubsub:messages:recv":    atomic.LoadInt64(&s.cntMessagesRecv),
+		"redis:pubsub:messages:send":    atomic.LoadInt64(&s.cntMessagesSend),
+		"redis:pubsub:latency:<100":     atomic.LoadInt64(&s.cntLatencyLessThan100ms),
+		"redis:pubsub:latency:<500":     atomic.LoadInt64(&s.cntLatencyLessThan500ms),
+		"redis:pubsub:latency:<1000":    atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
+		"redis:pubsub:latency:>=1000":   atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
 	}
 }
