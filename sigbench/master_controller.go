@@ -108,12 +108,13 @@ func (c *MasterController) Run(job *Job) error {
 		return err
 	}
 
-	for _, agent := range c.Agents {
+	for idx, agent := range c.Agents {
 		wg.Add(1)
-		go func(agent *AgentDelegate) {
+		go func(idx int, agent *AgentDelegate) {
 			args := &AgentRunArgs{
 				Job:        *job,
 				AgentCount: agentCount,
+				AgentIdx:   idx,
 			}
 			var result AgentRunResult
 			if err := agent.Client.Call("AgentController.Run", args, &result); err != nil {
@@ -122,7 +123,7 @@ func (c *MasterController) Run(job *Job) error {
 			}
 
 			wg.Done()
-		}(agent)
+		}(idx, agent)
 	}
 
 	stopWatchCounterChan := make(chan struct{})

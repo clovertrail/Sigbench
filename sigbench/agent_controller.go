@@ -17,15 +17,30 @@ type AgentController struct {
 type AgentRunArgs struct {
 	Job        Job
 	AgentCount int
+	AgentIdx   int
 }
 
 type AgentRunResult struct {
 	Error error
 }
 
-func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount int, wg *sync.WaitGroup) {
+func (c *AgentController) getSessionUsers(phase *JobPhase, percentage float64, agentCount, agentIdx int) int64 {
+	totalSessionUsers := int64(float64(phase.UsersPerSecond) * percentage)
+
+	// Ceiling divide
+	major := (totalSessionUsers + int64(agentCount) - 1) / int64(agentCount)
+	last := totalSessionUsers - major * (int64(agentCount) - 1)
+
+	if agentIdx == agentCount - 1 {
+		return last
+	} else {
+		return major
+	}
+}
+
+func (c *AgentController) runPhase(job *Job, phase *JobPhase, agentCount, agentIdx int, wg *sync.WaitGroup) {
 	for idx, sessionName := range job.SessionNames {
-		sessionUsers := int64(float64(phase.UsersPerSecond) * job.SessionPercentages[idx] / float64(agentCount))
+		sessionUsers := c.getSessionUsers(phase, job.SessionPercentages[idx], agentCount, agentIdx)
 		log.Println(fmt.Sprintf("Session %s users: %d", sessionName, sessionUsers))
 
 		var session sessions.Session
@@ -80,7 +95,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 			}
 
 			wg.Add(1)
-			go c.runPhase(&args.Job, &phase, args.AgentCount, &wg)
+			go c.runPhase(&args.Job, &phase, args.AgentCount, args.AgentIdx, &wg)
 
 			if phase.Duration-now.Sub(start) <= 0 {
 				ticker.Stop()
