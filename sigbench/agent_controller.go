@@ -1,6 +1,5 @@
 package sigbench
 
-import ()
 import (
 	"fmt"
 	"log"
@@ -29,12 +28,19 @@ func (c *AgentController) getSessionUsers(phase *JobPhase, percentage float64, a
 
 	// Ceiling divide
 	major := (totalSessionUsers + int64(agentCount) - 1) / int64(agentCount)
-	last := totalSessionUsers - major * (int64(agentCount) - 1)
 
-	if agentIdx == agentCount - 1 {
+	lastIdx := agentCount - 1
+	for totalSessionUsers - major * int64(lastIdx) < 0 {
+		lastIdx--
+	}
+	last := totalSessionUsers - int64(lastIdx) * major
+
+	if agentIdx < lastIdx {
+		return major
+	} else if agentIdx == lastIdx {
 		return last
 	} else {
-		return major
+		return 0
 	}
 }
 
