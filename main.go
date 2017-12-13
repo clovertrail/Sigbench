@@ -15,6 +15,7 @@ import (
 
 	"microsoft.com/sigbench"
 	"microsoft.com/sigbench/snapshot"
+	"microsoft.com/sigbench/service"
 )
 
 func startAsMaster(agents []string, config string, outDir string) {
@@ -126,8 +127,13 @@ func startAsAgent(address string) {
 	http.Serve(l, nil)
 }
 
+func startAsService(address string, outDir string) {
+	mux := service.NewServiceMux(outDir)
+	log.Fatal(http.ListenAndServe(address, mux))
+}
+
 func main() {
-	var isMaster = flag.Bool("master", false, "True if master")
+	var mode = flag.String("mode", "agent", "service | cli | agent")
 	var config = flag.String("config", "config.json", "Job config file")
 	var outDir = flag.String("outDir", "output/"+strconv.FormatInt(time.Now().Unix(), 10), "Output directory")
 	var listenAddress = flag.String("l", ":7000", "Listen address")
@@ -135,9 +141,16 @@ func main() {
 
 	flag.Parse()
 
-	if isMaster != nil && *isMaster {
-		log.Println("Start as master")
+	if mode == nil {
+		log.Fatalln("No mode specified")
+	}
+
+	if *mode == "cli" {
+		log.Println("Start as CLI master")
 		startAsMaster(strings.Split(*agents, ","), *config, *outDir)
+	} else if *mode == "service" {
+		log.Println("Start as service")
+		startAsService(*listenAddress, *outDir)
 	} else {
 		log.Println("Start as agent: ", *listenAddress)
 		startAsAgent(*listenAddress)
