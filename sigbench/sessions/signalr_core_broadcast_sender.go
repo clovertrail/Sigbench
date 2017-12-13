@@ -10,9 +10,14 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"microsoft.com/sigbench/util"
+	"strings"
 )
 
+const MaxInstances = 256
+
 type SignalRCoreBroadcastSender struct {
+	userIdx                  int64
 	cntInProgress            int64
 	cntConnected             int64
 	cntError                 int64
@@ -24,6 +29,7 @@ type SignalRCoreBroadcastSender struct {
 	cntLatencyLessThan500ms  int64
 	cntLatencyLessThan1000ms int64
 	cntLatencyMoreThan1000ms int64
+	cntInstances             []int64
 }
 
 func (s *SignalRCoreBroadcastSender) Name() string {
@@ -31,6 +37,7 @@ func (s *SignalRCoreBroadcastSender) Name() string {
 }
 
 func (s *SignalRCoreBroadcastSender) Setup(map[string]string) error {
+	s.userIdx = 0
 	s.cntInProgress = 0
 	s.cntConnected = 0
 	s.cntError = 0
@@ -42,6 +49,7 @@ func (s *SignalRCoreBroadcastSender) Setup(map[string]string) error {
 	s.cntLatencyLessThan500ms = 0
 	s.cntLatencyLessThan1000ms = 0
 	s.cntLatencyMoreThan1000ms = 0
+	s.cntInstances = make([]int64, MaxInstances, MaxInstances)
 	return nil
 }
 
@@ -63,11 +71,24 @@ func (s *SignalRCoreBroadcastSender) logLatency(latency int64) {
 	}
 }
 
+func (s *SignalRCoreBroadcastSender) logHostInstance(ctx *UserContext, hostName string) error {
+	hostInstanceId, err := util.GetVMSSInstanceId(hostName)
+	if err != nil {
+		s.logError(ctx, "Fail to decode host name "+hostName, err)
+		return err
+	}
+	atomic.AddInt64(&s.cntInstances[hostInstanceId], 1)
+	return nil
+}
+
 func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
-	host := ctx.Params[ParamHost]
+	// Select a host using round-robin
+	hosts := strings.Split(ctx.Params[ParamHost], ",")
+	host := hosts[atomic.AddInt64(&s.userIdx, 1)%int64(len(hosts))]
+
 	broadcastDurationSecs := 10
 	if secsStr, ok := ctx.Params[ParamBroadcastDurationSecs]; ok {
 		if secs, err := strconv.Atoi(secsStr); err == nil {
@@ -87,6 +108,11 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 		return err
 	}
 	defer handshakeResp.Body.Close()
+
+	// Record host instance
+	if err = s.logHostInstance(ctx, handshakeResp.Header.Get("X-HostName")); err != nil {
+		return err
+	}
 
 	decoder := json.NewDecoder(handshakeResp.Body)
 	var handshakeContent SignalRCoreHandshakeResp
@@ -209,7 +235,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 }
 
 func (s *SignalRCoreBroadcastSender) Counters() map[string]int64 {
-	return map[string]int64{
+	counters := map[string]int64{
 		"signalrcore:broadcast:inprogress":     atomic.LoadInt64(&s.cntInProgress),
 		"signalrcore:broadcast:connected":      atomic.LoadInt64(&s.cntConnected),
 		"signalrcore:broadcast:success":        atomic.LoadInt64(&s.cntSuccess),
@@ -222,4 +248,12 @@ func (s *SignalRCoreBroadcastSender) Counters() map[string]int64 {
 		"signalrcore:broadcast:latency:<1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
 		"signalrcore:broadcast:latency:>=1000": atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
 	}
+
+	for i := 0; i < MaxInstances; i++ {
+		if val := atomic.LoadInt64(&s.cntInstances[i]); val > 0 {
+			counters["signalrcore:broadcast:instancehit:"+strconv.Itoa(i)] = val
+		}
+	}
+
+	return counters
 }
