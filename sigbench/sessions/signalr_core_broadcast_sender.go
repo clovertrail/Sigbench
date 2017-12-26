@@ -186,7 +186,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
 			},
-			NonBlocking: false,
+			//NonBlocking: false,
 		})
 		if err != nil {
 			s.logError(ctx, "Fail to serialize signalr core message", err)
