@@ -63,21 +63,28 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
 	host := ctx.Params[ParamHost]
-	negotiateResponse, err := http.Post("http://"+host+"/chat/negotiate", "text/plain;charset=UTF-8", nil)
-	if err != nil {
-		s.logError("Failed to negotiate with the server", err)
-		return err
-	}
-	defer negotiateResponse.Body.Close()
+	useNego := ctx.Params[ParamUseNego]
+	lazySending := ctx.Params[ParamLazySending]
+	var wsUrl string
+	if useNego == "true" {
+		negotiateResponse, err := http.Post("http://"+host+"/chat/negotiate", "text/plain;charset=UTF-8", nil)
+		if err != nil {
+			s.logError("Failed to negotiate with the server", err)
+			return err
+		}
+		defer negotiateResponse.Body.Close()
 
-	decoder := json.NewDecoder(negotiateResponse.Body)
-	var handshakeContent SignalRCoreHandshakeResp
-	err = decoder.Decode(&handshakeContent)
-	if err != nil {
-		s.logError("Fail to obtain connection id", err)
-		return err
+		decoder := json.NewDecoder(negotiateResponse.Body)
+		var handshakeContent SignalRCoreHandshakeResp
+		err = decoder.Decode(&handshakeContent)
+		if err != nil {
+			s.logError("Fail to obtain connection id", err)
+			return err
+		}
+		wsUrl = "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
+	} else {
+		wsUrl = "ws://" + host + "/chat"
 	}
-	wsUrl := "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
 	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {
 		s.logError("Fail to connect to websocket", err)
@@ -85,9 +92,8 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	}
 	defer c.Close()
 
-	//startSend := make(chan int)
+	startSend := make(chan int)
 	doneChan := make(chan struct{})
-	//recvChan := make(chan int64)
 
 	go func() {
 		defer close(doneChan)
@@ -112,13 +118,14 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 				return
 			}
 
-				//if content.Target == "start" {
-				//	startSend <- 1
-				//}
+			if lazySending == "true" {
+				if content.Target == "start" {
+					startSend <- 1
+				}
+			}
 			if content.Target == "echo" {
 				startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
 				s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
-				//recvChan <- (time.Now().UnixNano() - startTime) / 1000000
 			}
 		}
 	}()
@@ -128,8 +135,10 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 		s.logError("Fail to set protocol", err)
 		return err
 	}
-	//<-startSend
-	//log.Println("Server informs to send")
+	// waiting until receiving "start" command
+	if lazySending == "true" {
+		<-startSend
+	}
 	// Send message
 	invocationId := 0
 
@@ -172,16 +181,6 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 		}
 	}
 
-	// Wait echo response
-	/*
-	select {
-	case <-time.After(1 * time.Minute):
-		s.logError("Fail to receive echo within timeout", nil)
-		return errors.New("fail to receive echo within timeout")
-	case latency := <-recvChan:
-		s.logLatency(latency)
-	}
-	*/
 	// close websocket
 	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {

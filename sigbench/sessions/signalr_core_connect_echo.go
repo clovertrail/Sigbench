@@ -16,6 +16,7 @@ type SignalRConnCoreEcho struct {
 	cntInProgress int64
 	cntError      int64
 	cntSuccess    int64
+	messageSendCount         int64
 	cntLatencyLessThan100ms  int64
 	cntLatencyLessThan500ms  int64
 	cntLatencyLessThan1000ms int64
@@ -43,6 +44,7 @@ func (s *SignalRConnCoreEcho) Setup(map[string]string) error {
 	s.cntInProgress = 0
 	s.cntError = 0
 	s.cntSuccess = 0
+	s.messageSendCount = 0
 	s.cntLatencyLessThan100ms = 0
 	s.cntLatencyLessThan500ms = 0
 	s.cntLatencyLessThan1000ms = 0
@@ -59,7 +61,9 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
+	useNego := ctx.Params[ParamUseNego]
 	host := ctx.Params[ParamHost]
+	lazySending := ctx.Params[ParamLazySending]
 	negotiateResponse, err := http.Post("http://"+host+"/chat/negotiate", "text/plain;charset=UTF-8", nil)
 	if err != nil {
 		s.logError("Failed to negotiate with the server", err)
@@ -74,7 +78,26 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 		s.logError("Fail to obtain connection id", err)
 		return err
 	}
-	wsUrl := "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
+	var wsUrl string
+	if useNego == "true" {
+		negotiateResponse, err := http.Post("http://"+host+"/chat/negotiate", "text/plain;charset=UTF-8", nil)
+		if err != nil {
+			s.logError("Failed to negotiate with the server", err)
+			return err
+		}
+		defer negotiateResponse.Body.Close()
+
+		decoder := json.NewDecoder(negotiateResponse.Body)
+		var handshakeContent SignalRCoreHandshakeResp
+		err = decoder.Decode(&handshakeContent)
+		if err != nil {
+			s.logError("Fail to obtain connection id", err)
+			return err
+		}
+		wsUrl = "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
+	} else {
+		wsUrl = "ws://" + host + "/chat"
+	}
 	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {
 		s.logError("Fail to connect to websocket", err)
@@ -84,7 +107,6 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 
 	startSend := make(chan int)
 	doneChan := make(chan struct{})
-	recvChan := make(chan int64)
 
 	go func() {
 		defer close(doneChan)
@@ -106,12 +128,14 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 			}
 
 			if content.Type == 1 {
-				if content.Target == "start" {
-					startSend <- 1
+				if lazySending == "true" {
+					if content.Target == "start" {
+						startSend <- 1
+					}
 				}
 				if content.Target == "echo" {
 					startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
-					recvChan <- (time.Now().UnixNano() - startTime) / 1000000
+					s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
 				}
 			}
 		}
@@ -122,30 +146,43 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 		s.logError("Fail to set protocol", err)
 		return err
 	}
-	<-startSend
-	//log.Println("Server informs to send")
-	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
-		Type:         1,
-		InvocationId: "0",
-		Target:       "echo",
-		Arguments: []string{
-			ctx.UserId,
-			strconv.FormatInt(time.Now().UnixNano(), 10),
-		},
-	})
-	err = c.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		s.logError("Fail to send echo", err)
-		return err
+	// waiting until receiving "start" command
+	if lazySending == "true" {
+		<-startSend
 	}
 
-	// Wait echo response
-	select {
-	case <-time.After(1 * time.Minute):
-		s.logError("Fail to receive echo within timeout", nil)
-		return errors.New("fail to receive echo within timeout")
-	case latency := <-recvChan:
-		s.logLatency(latency)
+	invocationId := 0
+	sendMessage := func() error {
+		msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
+			Type:         1,
+			InvocationId: strconv.Itoa(invocationId),
+			Target:       "echo",
+			Arguments: []string{
+				ctx.UserId,
+				strconv.FormatInt(time.Now().UnixNano(), 10),
+			},
+		})
+		err = c.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			s.logError("Fail to send echo", err)
+			return err
+		}
+		invocationId++
+		atomic.AddInt64(&s.messageSendCount, 1)
+		return nil
+	}
+	if err = sendMessage(); err != nil {
+		return err
+	}
+	repeatEcho := ctx.Params[ParamRepeatEcho]
+	if repeatEcho == "true" {
+		ticker := time.NewTicker(time.Second)
+		for range ticker.C {
+			if err = sendMessage(); err != nil {
+				ticker.Stop()
+				return err
+			}
+		}
 	}
 
 	// close websocket
@@ -170,6 +207,7 @@ func (s *SignalRConnCoreEcho) Counters() map[string]int64 {
 		"signalrcore:echo:inprogress": atomic.LoadInt64(&s.cntInProgress),
 		"signalrcore:echo:success":    atomic.LoadInt64(&s.cntSuccess),
 		"signalrcore:echo:error":      atomic.LoadInt64(&s.cntError),
+		"signalrcore:echo:msgsendcount":     atomic.LoadInt64(&s.messageSendCount),
 		"signalrcore:echo:latency:lt_100":   atomic.LoadInt64(&s.cntLatencyLessThan100ms),
 		"signalrcore:echo:latency:lt_500":   atomic.LoadInt64(&s.cntLatencyLessThan500ms),
 		"signalrcore:echo:latency:lt_1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),

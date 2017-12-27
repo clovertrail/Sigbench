@@ -6,4 +6,6 @@ const (
 	ParamBroadcastDurationSecs = "broadcastDurationSecs"
 	ParamPublishInterval       = "publishInterval"
 	ParamRepeatEcho            = "repeatEcho"
+	ParamUseNego               = "useNego"
+	ParamLazySending           = "lazySending"
 )
