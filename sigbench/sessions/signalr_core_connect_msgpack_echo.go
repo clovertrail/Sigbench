@@ -9,24 +9,26 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vmihailenco/msgpack"
 	"github.com/gorilla/websocket"
 )
 
-type SignalRConnCoreEcho struct {
+type SignalRConnMsgPackEcho struct {
 	cntInProgress int64
 	cntError      int64
 	cntSuccess    int64
+	messageSendCount         int64
 	cntLatencyLessThan100ms  int64
 	cntLatencyLessThan500ms  int64
 	cntLatencyLessThan1000ms int64
 	cntLatencyMoreThan1000ms int64
 }
 
-func (s *SignalRConnCoreEcho) Name() string {
-	return "SignalRCore:ConnectEcho"
+func (s *SignalRConnMsgPackEcho) Name() string {
+	return "SignalRConnMsgPackCore:ConnectEcho"
 }
 
-func (s *SignalRConnCoreEcho) logLatency(latency int64) {
+func (s *SignalRConnMsgPackEcho) logLatency(latency int64) {
 	// log.Println("Latency: ", latency)
 	if latency < 100 {
 		atomic.AddInt64(&s.cntLatencyLessThan100ms, 1)
@@ -39,10 +41,11 @@ func (s *SignalRConnCoreEcho) logLatency(latency int64) {
 	}
 }
 
-func (s *SignalRConnCoreEcho) Setup(map[string]string) error {
+func (s *SignalRConnMsgPackEcho) Setup(map[string]string) error {
 	s.cntInProgress = 0
 	s.cntError = 0
 	s.cntSuccess = 0
+	s.messageSendCount = 0
 	s.cntLatencyLessThan100ms = 0
 	s.cntLatencyLessThan500ms = 0
 	s.cntLatencyLessThan1000ms = 0
@@ -50,12 +53,12 @@ func (s *SignalRConnCoreEcho) Setup(map[string]string) error {
 	return nil
 }
 
-func (s *SignalRConnCoreEcho) logError(msg string, err error) {
+func (s *SignalRConnMsgPackEcho) logError(msg string, err error) {
 	log.Println("Error: ", msg, " due to ", err)
 	atomic.AddInt64(&s.cntError, 1)
 }
 
-func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
+func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
 
@@ -82,9 +85,9 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	}
 	defer c.Close()
 
-	startSend := make(chan int)
+	//startSend := make(chan int)
 	doneChan := make(chan struct{})
-	recvChan := make(chan int64)
+	//recvChan := make(chan int64)
 
 	go func() {
 		defer close(doneChan)
@@ -97,49 +100,80 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 				return
 			}
 
-			msg := msgWithTerm[:len(msgWithTerm)-1]
-			var content SignalRCoreInvocation
-			err = json.Unmarshal(msg, &content)
+			msg, err := decodeSignalRBinary(msgWithTerm)
+			if err != nil {
+				s.logError("Fail to decode msgpack", err)
+				return
+			}
+			var content MsgpackInvocation
+			err = msgpack.Unmarshal(msg, &content)
 			if err != nil {
 				s.logError("Fail to decode incoming message", err)
 				return
 			}
 
-			if content.Type == 1 {
-				if content.Target == "start" {
-					startSend <- 1
-				}
-				if content.Target == "echo" {
-					startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
-					recvChan <- (time.Now().UnixNano() - startTime) / 1000000
-				}
+				//if content.Target == "start" {
+				//	startSend <- 1
+				//}
+			if content.Target == "echo" {
+				startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
+				s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
+				//recvChan <- (time.Now().UnixNano() - startTime) / 1000000
 			}
 		}
 	}()
 
-	err = c.WriteMessage(websocket.TextMessage, []byte("{\"protocol\":\"json\"}\x1e"))
+	err = c.WriteMessage(websocket.TextMessage, []byte("{\"protocol\":\"messagepack\"}\x1e"))
 	if err != nil {
 		s.logError("Fail to set protocol", err)
 		return err
 	}
-	<-startSend
+	//<-startSend
 	//log.Println("Server informs to send")
-	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
-		Type:         1,
-		InvocationId: "0",
-		Target:       "echo",
-		Arguments: []string{
-			ctx.UserId,
-			strconv.FormatInt(time.Now().UnixNano(), 10),
-		},
-	})
-	err = c.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		s.logError("Fail to send echo", err)
+	// Send message
+	invocationId := 0
+
+	sendMessage := func() error {
+		invocation := MsgpackInvocation{
+			MessageType:  1,
+			InvocationId: strconv.Itoa(invocationId),
+			Target:       "echo",
+			Arguments: []string{
+				ctx.UserId,
+				strconv.FormatInt(time.Now().UnixNano(), 10),
+			},
+		}
+		msg, err := msgpack.Marshal(&invocation)
+		if err != nil {
+			s.logError("Fail to pack signalr core message", err)
+			return err
+		}
+		msgPack, err := encodeSignalRBinary(msg)
+		if err != nil {
+			s.logError("Fail to encode echo message", err)
+			return err
+		}
+		c.WriteMessage(websocket.BinaryMessage, msgPack)
+		invocationId++
+		atomic.AddInt64(&s.messageSendCount, 1)
+		return nil
+	}
+	if err = sendMessage(); err != nil {
 		return err
+	}
+	repeatEcho := ctx.Params[ParamRepeatEcho]
+	if repeatEcho == "true" {
+		ticker := time.NewTicker(time.Second)
+		for range ticker.C {
+			if err = sendMessage(); err != nil {
+				ticker.Stop()
+				return err
+			}
+		}
 	}
 
 	// Wait echo response
+	/*
 	select {
 	case <-time.After(1 * time.Minute):
 		s.logError("Fail to receive echo within timeout", nil)
@@ -147,7 +181,7 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	case latency := <-recvChan:
 		s.logLatency(latency)
 	}
-
+	*/
 	// close websocket
 	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
@@ -165,11 +199,12 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	}
 }
 
-func (s *SignalRConnCoreEcho) Counters() map[string]int64 {
+func (s *SignalRConnMsgPackEcho) Counters() map[string]int64 {
 	return map[string]int64{
 		"signalrcore:echo:inprogress": atomic.LoadInt64(&s.cntInProgress),
 		"signalrcore:echo:success":    atomic.LoadInt64(&s.cntSuccess),
 		"signalrcore:echo:error":      atomic.LoadInt64(&s.cntError),
+		"signalrcore:echo:msgsendcount":     atomic.LoadInt64(&s.messageSendCount),
 		"signalrcore:echo:latency:lt_100":   atomic.LoadInt64(&s.cntLatencyLessThan100ms),
 		"signalrcore:echo:latency:lt_500":   atomic.LoadInt64(&s.cntLatencyLessThan500ms),
 		"signalrcore:echo:latency:lt_1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
