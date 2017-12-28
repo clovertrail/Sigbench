@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log"
@@ -13,14 +14,11 @@ import (
 )
 
 type SignalRConnCoreEcho struct {
-	cntInProgress int64
-	cntError      int64
-	cntSuccess    int64
-	messageSendCount         int64
-	cntLatencyLessThan100ms  int64
-	cntLatencyLessThan500ms  int64
-	cntLatencyLessThan1000ms int64
-	cntLatencyMoreThan1000ms int64
+	cntInProgress    int64
+	cntError         int64
+	cntSuccess       int64
+	messageSendCount int64
+	latency          [LatencyArrayLen]int64
 }
 
 func (s *SignalRConnCoreEcho) Name() string {
@@ -29,15 +27,11 @@ func (s *SignalRConnCoreEcho) Name() string {
 
 func (s *SignalRConnCoreEcho) logLatency(latency int64) {
 	// log.Println("Latency: ", latency)
-	if latency < 100 {
-		atomic.AddInt64(&s.cntLatencyLessThan100ms, 1)
-	} else if latency < 500 {
-		atomic.AddInt64(&s.cntLatencyLessThan500ms, 1)
-	} else if latency < 1000 {
-		atomic.AddInt64(&s.cntLatencyLessThan1000ms, 1)
-	} else {
-		atomic.AddInt64(&s.cntLatencyMoreThan1000ms, 1)
+	index := int(latency / LatencyStep)
+	if index > LatencyArrayLen-1 {
+		index = LatencyArrayLen - 1
 	}
+	atomic.AddInt64(&s.latency[index], 1)
 }
 
 func (s *SignalRConnCoreEcho) Setup(map[string]string) error {
@@ -45,10 +39,6 @@ func (s *SignalRConnCoreEcho) Setup(map[string]string) error {
 	s.cntError = 0
 	s.cntSuccess = 0
 	s.messageSendCount = 0
-	s.cntLatencyLessThan100ms = 0
-	s.cntLatencyLessThan500ms = 0
-	s.cntLatencyLessThan1000ms = 0
-	s.cntLatencyMoreThan1000ms = 0
 	return nil
 }
 
@@ -203,14 +193,28 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 }
 
 func (s *SignalRConnCoreEcho) Counters() map[string]int64 {
-	return map[string]int64{
-		"signalrcore:echo:inprogress": atomic.LoadInt64(&s.cntInProgress),
-		"signalrcore:echo:success":    atomic.LoadInt64(&s.cntSuccess),
-		"signalrcore:echo:error":      atomic.LoadInt64(&s.cntError),
-		"signalrcore:echo:msgsendcount":     atomic.LoadInt64(&s.messageSendCount),
-		"signalrcore:echo:latency:lt_100":   atomic.LoadInt64(&s.cntLatencyLessThan100ms),
-		"signalrcore:echo:latency:lt_500":   atomic.LoadInt64(&s.cntLatencyLessThan500ms),
-		"signalrcore:echo:latency:lt_1000":  atomic.LoadInt64(&s.cntLatencyLessThan1000ms),
-		"signalrcore:echo:latency:ge_1000": atomic.LoadInt64(&s.cntLatencyMoreThan1000ms),
+	counters := map[string]int64{
+		"signalrcore:echo:inprogress":   atomic.LoadInt64(&s.cntInProgress),
+		"signalrcore:echo:success":      atomic.LoadInt64(&s.cntSuccess),
+		"signalrcore:echo:error":        atomic.LoadInt64(&s.cntError),
+		"signalrcore:echo:msgsendcount": atomic.LoadInt64(&s.messageSendCount),
 	}
+	var buffer bytes.Buffer
+	var displayLabel int
+	var step int = int(LatencyStep)
+	for i := 0; i < LatencyArrayLen; i++ {
+		buffer.Reset()
+		buffer.WriteString("signalrcore:echo:latency:")
+		if i < LatencyArrayLen-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.latency[i]
+	}
+
+	return counters
 }

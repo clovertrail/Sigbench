@@ -37,6 +37,7 @@ func (w *JsonSnapshotWriter) WriteCounters(now time.Time, counters map[string]in
 	}
 	defer f.Close()
 
+	data = append(data, ',')
 	data = append(data, '\n')
 	f.Write(data)
 

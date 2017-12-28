@@ -6,7 +6,10 @@ import (
 
 	"github.com/vmihailenco/msgpack"
 )
+
 const SignalRCoreTerminator = '\x1e'
+const LatencyArrayLen int = 7
+const LatencyStep int64 = 200
 
 type SignalRCoreHandshakeResp struct {
 	AvailableTransports []string `json:"availableTransports"`
@@ -14,11 +17,11 @@ type SignalRCoreHandshakeResp struct {
 }
 
 type SignalRCoreInvocation struct {
-	InvocationId string   `json:"invocationId"`
-	Type         int      `json:"type"`
-	Target       string   `json:"target"`
-//	NonBlocking  bool     `json:"nonBlocking"`
-	Arguments    []string `json:"arguments"`
+	InvocationId string `json:"invocationId"`
+	Type         int    `json:"type"`
+	Target       string `json:"target"`
+	//	NonBlocking  bool     `json:"nonBlocking"`
+	Arguments []string `json:"arguments"`
 }
 
 type MsgpackInvocation struct {
@@ -48,40 +51,40 @@ func (m *MsgpackInvocation) DecodeMsgpack(dec *msgpack.Decoder) error {
 }
 
 func encodeSignalRBinary(bytes []byte) ([]byte, error) {
-        buffer := make([]byte, 0, 5+len(bytes))
-        length := len(bytes)
-        for length > 0 {
-                current := byte(length & 0x7F)
-                length >>= 7
-                if length > 0 {
-                        current |= 0x80
-                }
-                buffer = append(buffer, current)
-        }
-        if len(buffer) == 0 {
-                buffer = append(buffer, 0)
-        }
-        buffer = append(buffer, bytes...)
-        return buffer, nil
+	buffer := make([]byte, 0, 5+len(bytes))
+	length := len(bytes)
+	for length > 0 {
+		current := byte(length & 0x7F)
+		length >>= 7
+		if length > 0 {
+			current |= 0x80
+		}
+		buffer = append(buffer, current)
+	}
+	if len(buffer) == 0 {
+		buffer = append(buffer, 0)
+	}
+	buffer = append(buffer, bytes...)
+	return buffer, nil
 }
 
 var numBitsToShift = []uint{0, 7, 14, 21, 28}
 
 func decodeSignalRBinary(bytes []byte) ([]byte, error) {
-        moreBytes := true
-        msgLen := 0
-        numBytes := 0
-        for moreBytes && numBytes < len(bytes) {
-                byteRead := bytes[numBytes]
-                msgLen = msgLen | int(uint(byteRead&0x7F)<<numBitsToShift[numBytes])
-                numBytes++
-                moreBytes = (byteRead & 0x80) != 0
-        }
+	moreBytes := true
+	msgLen := 0
+	numBytes := 0
+	for moreBytes && numBytes < len(bytes) {
+		byteRead := bytes[numBytes]
+		msgLen = msgLen | int(uint(byteRead&0x7F)<<numBitsToShift[numBytes])
+		numBytes++
+		moreBytes = (byteRead & 0x80) != 0
+	}
 
-        if msgLen+numBytes > len(bytes) {
-                return nil, fmt.Errorf("Not enough data in message, message length = %d, length section bytes = %d, data length = %d", msgLen, numBytes, len(bytes))
-        }
-        return bytes[numBytes : numBytes+msgLen], nil
+	if msgLen+numBytes > len(bytes) {
+		return nil, fmt.Errorf("Not enough data in message, message length = %d, length section bytes = %d, data length = %d", msgLen, numBytes, len(bytes))
+	}
+	return bytes[numBytes : numBytes+msgLen], nil
 }
 
 func SerializeSignalRCoreMessage(body interface{}) ([]byte, error) {
