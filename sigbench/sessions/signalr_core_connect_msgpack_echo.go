@@ -21,8 +21,7 @@ func (s *SignalRConnMsgPackEcho) Name() string {
 }
 
 func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
-	atomic.AddInt64(&s.cntInProgress, 1)
-	defer atomic.AddInt64(&s.cntInProgress, -1)
+	s.logInProgress(1)
 
 	host := ctx.Params[ParamHost]
 	useNego := ctx.Params[ParamUseNego]
@@ -59,6 +58,7 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 
 	go func() {
 		defer close(doneChan)
+		established := false
 		for {
 			_, msgWithTerm, err := c.ReadMessage()
 			if err != nil {
@@ -68,6 +68,11 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 				return
 			}
 
+			if !established {
+				s.logEstablished(1)
+				s.logInProgress(-1)
+				established = true
+			}
 			msg, err := decodeSignalRBinary(msgWithTerm)
 			if err != nil {
 				s.logError("Fail to decode msgpack", err)
@@ -80,6 +85,8 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 				return
 			}
 
+			s.logMsgRecvCount(1)
+			s.logMsgRecvSize(int64(len(msgWithTerm)))
 			if lazySending == "true" {
 				if content.Target == "start" {
 					startSend <- 1
@@ -102,32 +109,13 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 		<-startSend
 	}
 	// Send message
-	invocationId := 0
-
 	sendMessage := func() error {
-		invocation := MsgpackInvocation{
-			MessageType:  1,
-			InvocationId: strconv.Itoa(invocationId),
-			Target:       "echo",
-			Arguments: []string{
+		return s.sendMsgPack(c,
+			"echo",
+			[]string{
 				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
-			},
-		}
-		msg, err := msgpack.Marshal(&invocation)
-		if err != nil {
-			s.logError("Fail to pack signalr core message", err)
-			return err
-		}
-		msgPack, err := encodeSignalRBinary(msg)
-		if err != nil {
-			s.logError("Fail to encode echo message", err)
-			return err
-		}
-		c.WriteMessage(websocket.BinaryMessage, msgPack)
-		invocationId++
-		atomic.AddInt64(&s.messageSendCount, 1)
-		return nil
+			})
 	}
 	if err = sendMessage(); err != nil {
 		return err

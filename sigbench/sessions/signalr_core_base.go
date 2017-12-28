@@ -8,19 +8,19 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	//"github.com/vmihailenco/msgpack"
 	"github.com/gorilla/websocket"
+	"github.com/vmihailenco/msgpack"
 )
 
 type SignalRCoreBase struct {
 	cntInProgress    int64
-	cntEstablished int64
+	cntEstablished   int64
 	cntError         int64
 	cntSuccess       int64
 	messageSendCount int64
 	messageRecvCount int64
-	msgSendSize int64
-	msgRecvSize int64
+	msgSendSize      int64
+	msgRecvSize      int64
 	latency          [LatencyArrayLen]int64
 }
 
@@ -77,6 +77,10 @@ func (s *SignalRCoreBase) Name() string {
 	return "SignalRCore:Base"
 }
 
+func (s *SignalRCoreBase) counterTag() string {
+	return "signalrcore:echo"
+}
+
 func (s *SignalRCoreBase) concatStr(v1 string, v2 string) string {
 	var buffer bytes.Buffer
 
@@ -86,16 +90,17 @@ func (s *SignalRCoreBase) concatStr(v1 string, v2 string) string {
 }
 
 var invocationId int = 0
+
 func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, arguments []string) error {
 	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
 		Type:         1,
 		InvocationId: strconv.Itoa(invocationId),
 		Target:       target,
-		Arguments: arguments,
+		Arguments:    arguments,
 	})
 	err = c.WriteMessage(websocket.TextMessage, msg)
 	if err != nil {
-		s.logError("Fail to send echo", err)
+		s.logError("Fail to send msg", err)
 		return err
 	}
 	invocationId++
@@ -104,17 +109,41 @@ func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, argument
 	return nil
 }
 
+func (s *SignalRCoreBase) sendMsgPack(c *websocket.Conn, target string, arguments []string) error {
+	invocation := MsgpackInvocation{
+		MessageType:  1,
+		InvocationId: strconv.Itoa(invocationId),
+		Target:       target,
+		Arguments:    arguments,
+	}
+	msg, err := msgpack.Marshal(&invocation)
+	if err != nil {
+		s.logError("Fail to pack signalr core message", err)
+		return err
+	}
+	msgPack, err := encodeSignalRBinary(msg)
+	if err != nil {
+		s.logError("Fail to encode message", err)
+		return err
+	}
+	c.WriteMessage(websocket.BinaryMessage, msgPack)
+	s.logMsgSendCount(1)
+	s.logMsgSendSize(int64(len(msgPack)))
+	invocationId++
+	return nil
+}
+
 func (s *SignalRCoreBase) Counters() map[string]int64 {
-	tag := s.Name()
+	tag := s.counterTag()
 	counters := map[string]int64{
-		s.concatStr(tag, ":established"): atomic.LoadInt64(&s.cntEstablished),
-		s.concatStr(tag, ":inprogress"): atomic.LoadInt64(&s.cntInProgress),
+		s.concatStr(tag, ":established"):  atomic.LoadInt64(&s.cntEstablished),
+		s.concatStr(tag, ":inprogress"):   atomic.LoadInt64(&s.cntInProgress),
 		s.concatStr(tag, ":success"):      atomic.LoadInt64(&s.cntSuccess),
 		s.concatStr(tag, ":error"):        atomic.LoadInt64(&s.cntError),
 		s.concatStr(tag, ":msgsendcount"): atomic.LoadInt64(&s.messageSendCount),
 		s.concatStr(tag, ":msgrecvcount"): atomic.LoadInt64(&s.messageRecvCount),
-		s.concatStr(tag, ":msgsendsize"): atomic.LoadInt64(&s.msgSendSize),
-		s.concatStr(tag, ":msgrecvsize"): atomic.LoadInt64(&s.msgRecvSize),
+		s.concatStr(tag, ":msgsendsize"):  atomic.LoadInt64(&s.msgSendSize),
+		s.concatStr(tag, ":msgrecvsize"):  atomic.LoadInt64(&s.msgRecvSize),
 	}
 	var buffer bytes.Buffer
 	var displayLabel int
