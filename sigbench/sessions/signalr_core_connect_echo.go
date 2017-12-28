@@ -1,10 +1,10 @@
 package sessions
 
 import (
-	"bytes"
+	//"bytes"
 	"encoding/json"
 	"errors"
-	"log"
+	//"log"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -14,17 +14,13 @@ import (
 )
 
 type SignalRConnCoreEcho struct {
-	cntInProgress    int64
-	cntError         int64
-	cntSuccess       int64
-	messageSendCount int64
-	latency          [LatencyArrayLen]int64
+	SignalRCoreBase
 }
 
 func (s *SignalRConnCoreEcho) Name() string {
 	return "SignalRCore:ConnectEcho"
 }
-
+/*
 func (s *SignalRConnCoreEcho) logLatency(latency int64) {
 	// log.Println("Latency: ", latency)
 	index := int(latency / LatencyStep)
@@ -47,6 +43,33 @@ func (s *SignalRConnCoreEcho) logError(msg string, err error) {
 	atomic.AddInt64(&s.cntError, 1)
 }
 
+func (s *SignalRConnCoreEcho) Counters() map[string]int64 {
+	counters := map[string]int64{
+		"signalrcore:echo:inprogress":   atomic.LoadInt64(&s.cntInProgress),
+		"signalrcore:echo:success":      atomic.LoadInt64(&s.cntSuccess),
+		"signalrcore:echo:error":        atomic.LoadInt64(&s.cntError),
+		"signalrcore:echo:msgsendcount": atomic.LoadInt64(&s.messageSendCount),
+	}
+	var buffer bytes.Buffer
+	var displayLabel int
+	var step int = int(LatencyStep)
+	for i := 0; i < LatencyArrayLen; i++ {
+		buffer.Reset()
+		buffer.WriteString("signalrcore:echo:latency:")
+		if i < LatencyArrayLen-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.latency[i]
+	}
+
+	return counters
+}
+*/
 func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	atomic.AddInt64(&s.cntInProgress, 1)
 	defer atomic.AddInt64(&s.cntInProgress, -1)
@@ -190,31 +213,4 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 		atomic.AddInt64(&s.cntSuccess, 1)
 		return nil
 	}
-}
-
-func (s *SignalRConnCoreEcho) Counters() map[string]int64 {
-	counters := map[string]int64{
-		"signalrcore:echo:inprogress":   atomic.LoadInt64(&s.cntInProgress),
-		"signalrcore:echo:success":      atomic.LoadInt64(&s.cntSuccess),
-		"signalrcore:echo:error":        atomic.LoadInt64(&s.cntError),
-		"signalrcore:echo:msgsendcount": atomic.LoadInt64(&s.messageSendCount),
-	}
-	var buffer bytes.Buffer
-	var displayLabel int
-	var step int = int(LatencyStep)
-	for i := 0; i < LatencyArrayLen; i++ {
-		buffer.Reset()
-		buffer.WriteString("signalrcore:echo:latency:")
-		if i < LatencyArrayLen-1 {
-			displayLabel = int(i*step + step)
-			buffer.WriteString("lt_")
-		} else {
-			displayLabel = int(i * step)
-			buffer.WriteString("ge_")
-		}
-		buffer.WriteString(strconv.Itoa(displayLabel))
-		counters[buffer.String()] = s.latency[i]
-	}
-
-	return counters
 }
