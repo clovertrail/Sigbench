@@ -61,14 +61,14 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 				return
 			}
 
-			s.logMsgRecvCount(1)
-			s.logMsgRecvSize(int64(len(msgWithTerm)))
 			if lazySending == "true" {
 				if content.Target == "start" {
 					startSend <- 1
 				}
 			}
 			if content.Target == "echo" {
+				s.logMsgRecvCount(1)
+				s.logMsgRecvSize(int64(len(msgWithTerm)))
 				startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
 				s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
 			}
