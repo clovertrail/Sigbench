@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	//"log"
-	"net/http"
+	//"net/http"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -27,31 +27,7 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	useNego := ctx.Params[ParamUseNego]
 	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
-	var wsUrl string
-	if useNego == "true" {
-		negotiateResponse, err := http.Post("http://"+host+"/chat/negotiate", "text/plain;charset=UTF-8", nil)
-		if err != nil {
-			s.logError("Failed to negotiate with the server", err)
-			return err
-		}
-		defer negotiateResponse.Body.Close()
-
-		decoder := json.NewDecoder(negotiateResponse.Body)
-		var handshakeContent SignalRCoreHandshakeResp
-		err = decoder.Decode(&handshakeContent)
-		if err != nil {
-			s.logError("Fail to obtain connection id", err)
-			return err
-		}
-		wsUrl = "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
-	} else {
-		wsUrl = "ws://" + host + "/chat"
-	}
-	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
-	if err != nil {
-		s.logError("Fail to connect to websocket", err)
-		return err
-	}
+	c, err := s.signalrCoreConnect(host, "chat", useNego == "true")
 	defer c.Close()
 
 	startSend := make(chan int)

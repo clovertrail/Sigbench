@@ -1,13 +1,16 @@
 package sessions
 
 import (
-	//"encoding/json"
+	"encoding/json"
 	"bytes"
 	//"fmt"
+	"net/http"
 	"log"
 	"strconv"
 	"sync/atomic"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
 	"github.com/vmihailenco/msgpack"
 )
@@ -131,6 +134,60 @@ func (s *SignalRCoreBase) sendMsgPack(c *websocket.Conn, target string, argument
 	s.logMsgSendSize(int64(len(msgPack)))
 	invocationId++
 	return nil
+}
+
+func (s *SignalRCoreBase) signalrCoreConnect(host string, hub string, nego bool) (*websocket.Conn, error) {
+	var wsUrl string
+	if (nego) {
+		negotiateResponse, err := http.Post("http://"+host+"/" + hub + "/negotiate", "text/plain;charset=UTF-8", nil)
+		if err != nil {
+			s.logError("Failed to negotiate with the server", err)
+			return nil, err
+		}
+		defer negotiateResponse.Body.Close()
+
+		decoder := json.NewDecoder(negotiateResponse.Body)
+		var handshakeContent SignalRCoreHandshakeResp
+		err = decoder.Decode(&handshakeContent)
+		if err != nil {
+			s.logError("Fail to obtain connection id", err)
+			return nil, err
+		}
+		wsUrl = "ws://" + host + "/chat?id=" + handshakeContent.ConnectionId
+	} else {
+		wsUrl = "ws://" + host + "/" + hub
+	}
+	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
+	if err != nil {
+		s.logError("Fail to connect to websocket", err)
+		return nil, err
+	}
+	return c, nil
+}
+
+func (s *SignalRCoreBase) signalrCoreServiceConnect(
+	endpoint string,
+	hub string,
+	key string,
+	audience string,
+	uid string) (*websocket.Conn, error) {
+        mySigningKey := []byte(key)
+        t := time.Now().Add(time.Second * 30)
+        // Create the Claims
+        claims := &jwt.StandardClaims{
+                ExpiresAt: t.Unix(),
+                Audience:  audience,
+        }
+
+        token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+        ss, _ := token.SignedString(mySigningKey)
+	var wsUrl = "ws://" + endpoint + "/client/" + hub + "?signalRTokenHeader=" + ss + "&uid=" + uid
+	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
+	if err != nil {
+		s.logError("Fail to connect to websocket", err)
+		return nil, err
+	}
+	return c, nil
 }
 
 func (s *SignalRCoreBase) Counters() map[string]int64 {

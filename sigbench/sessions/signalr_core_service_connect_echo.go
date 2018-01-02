@@ -1,32 +1,33 @@
 package sessions
 
 import (
-	//"encoding/json"
+	//"bytes"
+	"encoding/json"
 	"errors"
+	//"log"
 	//"net/http"
 	"strconv"
 	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/vmihailenco/msgpack"
 )
 
-type SignalRConnMsgPackEcho struct {
+type SignalRServiceConnCoreEcho struct {
 	SignalRCoreBase
 }
 
-func (s *SignalRConnMsgPackEcho) Name() string {
-	return "SignalRConnMsgPackCore:ConnectEcho"
+func (s *SignalRServiceConnCoreEcho) Name() string {
+	return "SignalRCoreService:ConnectEcho"
 }
 
-func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
+func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	s.logInProgress(1)
 
 	host := ctx.Params[ParamHost]
-	useNego := ctx.Params[ParamUseNego]
 	lazySending := ctx.Params[ParamLazySending]
-	c, err := s.signalrCoreConnect(host, "chat", useNego == "true")
+	c, err := s.signalrCoreServiceConnect(host, "chat",
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", host+"/client/", ctx.UserId)
 	defer c.Close()
 
 	startSend := make(chan int)
@@ -49,33 +50,31 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 				s.logInProgress(-1)
 				established = true
 			}
-			msg, err := decodeSignalRBinary(msgWithTerm)
-			if err != nil {
-				s.logError("Fail to decode msgpack", err)
-				return
-			}
-			var content MsgpackInvocation
-			err = msgpack.Unmarshal(msg, &content)
+			msg := msgWithTerm[:len(msgWithTerm)-1]
+			var content SignalRCoreInvocation
+			err = json.Unmarshal(msg, &content)
 			if err != nil {
 				s.logError("Fail to decode incoming message", err)
 				return
 			}
 
-			if lazySending == "true" {
-				if content.Target == "start" {
-					startSend <- 1
+			if content.Type == 1 {
+				if lazySending == "true" {
+					if content.Target == "start" {
+						startSend <- 1
+					}
 				}
-			}
-			if content.Target == "echo" {
-				s.logMsgRecvCount(1)
-				s.logMsgRecvSize(int64(len(msgWithTerm)))
-				startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
-				s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
+				if content.Target == "echo" {
+					s.logMsgRecvCount(1)
+					s.logMsgRecvSize(int64(len(msgWithTerm)))
+					startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
+					s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
+				}
 			}
 		}
 	}()
 
-	err = c.WriteMessage(websocket.TextMessage, []byte("{\"protocol\":\"messagepack\"}\x1e"))
+	err = c.WriteMessage(websocket.TextMessage, []byte("{\"protocol\":\"json\"}\x1e"))
 	if err != nil {
 		s.logError("Fail to set protocol", err)
 		return err
@@ -84,11 +83,10 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	if lazySending == "true" {
 		<-startSend
 	}
-	// Send message
 	sendMessage := func() error {
-		return s.sendMsgPack(c,
+		return s.sendJsonMsg(c,
 			"echo",
-			[]string{
+			[]string {
 				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
 			})
