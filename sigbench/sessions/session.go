@@ -14,6 +14,7 @@ type Session interface {
 
 var SessionMap = map[string]Session{
 	"signalrcoreservice:echo": &SignalRServiceConnCoreEcho{},
+	"signalrcoreservicemsgpack:echo": &SignalRServiceConnMsgPackEcho{},
 	"signalrcore:echo":             &SignalRCoreEcho{},
 	"signalrconncore:echo":		&SignalRConnCoreEcho{},
 	"signalrconnmsgpackcore:echo":		&SignalRConnMsgPackEcho{},
