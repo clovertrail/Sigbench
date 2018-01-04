@@ -91,7 +91,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 
 	for _, phase := range args.Job.Phases {
 		log.Println("Phase: ", phase)
-		d := phase.Duration
+		d := phase.Duration + 1
 		start := time.Now()
 
 		ticker := time.NewTicker(time.Second)
