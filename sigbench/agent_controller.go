@@ -91,11 +91,12 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 
 	for _, phase := range args.Job.Phases {
 		log.Println("Phase: ", phase)
+		d := phase.Duration
 		start := time.Now()
 
 		ticker := time.NewTicker(time.Second)
 		for now := range ticker.C {
-			if phase.Duration-now.Sub(start) <= 0 {
+			if d*(int64(time.Second))-int64(now.Sub(start)) <= 0 {
 				ticker.Stop()
 				break
 			}
@@ -103,7 +104,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 			wg.Add(1)
 			go c.runPhase(&args.Job, &phase, args.AgentCount, args.AgentIdx, &wg)
 
-			if phase.Duration-now.Sub(start) <= 0 {
+			if d*(int64(time.Second))-int64(now.Sub(start)) <= 0 {
 				ticker.Stop()
 				break
 			}

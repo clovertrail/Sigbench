@@ -1,11 +1,11 @@
 package sigbench
 
-import "time"
+//import "time"
 
 type JobPhase struct {
 	Name           string
 	UsersPerSecond int64
-	Duration       time.Duration
+	Duration       int64
 }
 
 type Job struct {
