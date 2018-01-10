@@ -1,0 +1,20 @@
+{
+	"Phases":[
+		{
+			"Name":"echo",
+			"UsersPerSecond":100,
+			"Duration":60
+		}
+	],
+	"SessionNames":[
+		"signalrcoreservice:echo"
+	],
+	"SessionPercentages":[
+		1
+	],
+	"SessionParams":{
+		"host": "10.156.76.49:5001",
+		"lazySending": "true",
+		"repeatEcho": "true"
+	}
+}

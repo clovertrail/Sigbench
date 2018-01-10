@@ -8,8 +8,8 @@ import (
 )
 
 const SignalRCoreTerminator = '\x1e'
-const LatencyArrayLen int = 7
-const LatencyStep int64 = 200
+const LatencyArrayLen int = 11
+const LatencyStep int64 = 100
 
 type SignalRCoreHandshakeResp struct {
 	AvailableTransports []string `json:"availableTransports"`
