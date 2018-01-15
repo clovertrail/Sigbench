@@ -1,9 +1,10 @@
 package sessions
 
 import (
-	//"bytes"
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	//"log"
 	//"net/http"
 	"strconv"
@@ -13,8 +14,62 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const InternalLatencyLength int = 2
+const InternalLatencyStep int64 = 100
+
+const ExternalLatencyLength int = 5
+const ExternalLatencyStep int64 = 200
+
 type SignalRServiceConnCoreEcho struct {
 	SignalRCoreBase
+	client2ServiceInternalLat [InternalLatencyLength]int64
+	service2ServerExternalLat [ExternalLatencyLength]int64
+	server2ServiceExternalLat [ExternalLatencyLength]int64
+	service2ClientInternalLat [InternalLatencyLength]int64
+	serverInternalLat         [InternalLatencyLength]int64
+}
+
+func (s *SignalRServiceConnCoreEcho) logClient2ServiceInternalLat(latency int64) {
+	index := int(latency / InternalLatencyStep)
+	if index > InternalLatencyLength-1 {
+		index = InternalLatencyLength - 1
+	}
+	atomic.AddInt64(&s.client2ServiceInternalLat[index], 1)
+}
+
+func (s *SignalRServiceConnCoreEcho) logService2ClientInternalLat(latency int64) {
+	index := int(latency / InternalLatencyStep)
+	if index > InternalLatencyLength-1 {
+		index = InternalLatencyLength - 1
+	}
+	atomic.AddInt64(&s.service2ClientInternalLat[index], 1)
+}
+
+func (s *SignalRServiceConnCoreEcho) logServerInternalLat(latency int64) {
+	index := int(latency / InternalLatencyStep)
+	if index > InternalLatencyLength-1 {
+		index = InternalLatencyLength - 1
+	}
+	atomic.AddInt64(&s.serverInternalLat[index], 1)
+}
+
+func (s *SignalRServiceConnCoreEcho) logService2ServerExternalLat(latency int64) {
+	index := int(latency / ExternalLatencyStep)
+	if index > ExternalLatencyLength-1 {
+		index = ExternalLatencyLength - 1
+	} else if index < 0 {
+		fmt.Printf("Negative latency %d\n", latency)
+		return
+	}
+	atomic.AddInt64(&s.service2ServerExternalLat[index], 1)
+}
+
+func (s *SignalRServiceConnCoreEcho) logServer2ServiceExternalLat(latency int64) {
+	index := int(latency / ExternalLatencyStep)
+	if index > ExternalLatencyLength-1 {
+		index = ExternalLatencyLength - 1
+	}
+	atomic.AddInt64(&s.server2ServiceExternalLat[index], 1)
 }
 
 func (s *SignalRServiceConnCoreEcho) Name() string {
@@ -27,7 +82,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
 	c, err := s.signalrCoreServiceConnect(host, "chat",
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", host+"/client/", ctx.UserId)
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", host+"/client/", ctx.UserId)
 	defer c.Close()
 
 	startSend := make(chan int)
@@ -70,6 +125,30 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 					startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
 					s.logLatency((time.Now().UnixNano() - startTime) / 1000000)
 				}
+			} else if content.Type == 3 {
+				var complete SignalRCoreServiceCompletion
+				err = json.Unmarshal(msg, &complete)
+				if err != nil {
+					s.logError("Fail to decode incoming message", err)
+					return
+				}
+				if complete.Meta != nil && complete.Meta["A"] != "" && complete.Meta["B"] != "" &&
+					complete.Meta["C"] != "" && complete.Meta["D"] != "" &&
+					complete.Meta["E"] != "" && complete.Meta["F"] != "" {
+					fmt.Printf("%s\n", complete.Meta["A"])
+					timeServiceRecvClient, _ := strconv.ParseInt(complete.Meta["A"], 10, 64)
+					timeServiceSendServer, _ := strconv.ParseInt(complete.Meta["B"], 10, 64)
+					timeServerRecvService, _ := strconv.ParseInt(complete.Meta["C"], 10, 64)
+					timeServerSendService, _ := strconv.ParseInt(complete.Meta["D"], 10, 64)
+					timeServiceRecvServer, _ := strconv.ParseInt(complete.Meta["E"], 10, 64)
+					timeServiceSendClient, _ := strconv.ParseInt(complete.Meta["F"], 10, 64)
+					s.logClient2ServiceInternalLat((timeServiceSendServer - timeServiceRecvClient) / 1000000)
+					s.logService2ServerExternalLat((timeServerRecvService - timeServiceSendServer) / 1000000)
+					//fmt.Printf("%d, %d, %d\n", timeServerRecvService, timeServiceSendServer, (timeServerRecvService - timeServiceSendServer) / 1000000)
+					s.logServerInternalLat((timeServerSendService - timeServerRecvService) / 1000000)
+					s.logServer2ServiceExternalLat((timeServiceRecvServer - timeServerSendService) / 1000000)
+					s.logService2ClientInternalLat((timeServiceSendClient - timeServiceRecvServer) / 1000000)
+				}
 			}
 		}
 	}()
@@ -86,7 +165,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	sendMessage := func() error {
 		return s.sendJsonMsg(c,
 			"echo",
-			[]string {
+			[]string{
 				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
 			})
@@ -120,4 +199,88 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 		atomic.AddInt64(&s.cntSuccess, 1)
 		return nil
 	}
+}
+
+func (s *SignalRServiceConnCoreEcho) Counters() map[string]int64 {
+	counters := s.SignalRCoreBase.Counters()
+
+	tag := s.counterTag()
+	var buffer bytes.Buffer
+	var displayLabel int
+	var step int = int(InternalLatencyStep)
+	for i := 0; i < InternalLatencyLength; i++ {
+		buffer.Reset()
+		buffer.WriteString(tag)
+		buffer.WriteString(":latency:")
+		buffer.WriteString("client2serviceIn")
+		if i < InternalLatencyLength-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.client2ServiceInternalLat[i]
+
+		buffer.Reset()
+		buffer.WriteString(tag)
+		buffer.WriteString(":latency:")
+		buffer.WriteString("service2clientIn")
+		if i < InternalLatencyLength-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.service2ClientInternalLat[i]
+
+		buffer.Reset()
+		buffer.WriteString(tag)
+		buffer.WriteString(":latency:")
+		buffer.WriteString("serverIn")
+		if i < InternalLatencyLength-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.serverInternalLat[i]
+	}
+
+	step = int(ExternalLatencyStep)
+	for i := 0; i < ExternalLatencyLength; i++ {
+		buffer.Reset()
+		buffer.WriteString(tag)
+		buffer.WriteString(":latency:")
+		buffer.WriteString("service2serverExt")
+		if i < InternalLatencyLength-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.service2ServerExternalLat[i]
+
+		buffer.Reset()
+		buffer.WriteString(tag)
+		buffer.WriteString(":latency:")
+		buffer.WriteString("server2serviceExt")
+		if i < InternalLatencyLength-1 {
+			displayLabel = int(i*step + step)
+			buffer.WriteString("lt_")
+		} else {
+			displayLabel = int(i * step)
+			buffer.WriteString("ge_")
+		}
+		buffer.WriteString(strconv.Itoa(displayLabel))
+		counters[buffer.String()] = s.server2ServiceExternalLat[i]
+	}
+	return counters
 }

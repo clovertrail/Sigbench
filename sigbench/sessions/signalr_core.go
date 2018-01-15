@@ -24,6 +24,22 @@ type SignalRCoreInvocation struct {
 	Arguments []string `json:"arguments"`
 }
 
+type SignalRCoreServiceInvocation struct {
+	InvocationId string   `json:"invocationId"`
+	Type         int      `json:"type"`
+	Target       string   `json:"target"`
+	NonBlocking  bool     `json:"nonBlocking"`
+	Arguments    []string `json:"arguments"`
+	Meta         map[string]string `json:"meta"`
+}
+
+type SignalRCoreServiceCompletion struct {
+	InvocationId string            `json:"invocationId"`
+	Type         int               `json:"type"`
+	Meta         map[string]string `json:"meta"`
+	Result       string            `json:"result"`
+}
+
 type MsgpackInvocation struct {
 	MessageType  int32
 	InvocationId string
