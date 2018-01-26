@@ -1,0 +1,20 @@
+{
+        "Phases":[
+                {
+                        "Name":"echo",
+                        "UsersPerSecond":100,
+                        "Duration":110
+                }
+        ],
+        "SessionNames":[
+                "signalrconnmsgpackcore:echo"
+        ],
+        "SessionPercentages":[
+                1
+        ],
+        "SessionParams":{
+                "host": "172.17.8.6:5050",
+                "repeatEcho": "true",
+		"useNonBlocking": "true"
+        }
+}
