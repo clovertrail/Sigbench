@@ -25,11 +25,11 @@ type SignalRCoreInvocation struct {
 }
 
 type SignalRCoreServiceInvocation struct {
-	InvocationId string   `json:"invocationId"`
-	Type         int      `json:"type"`
-	Target       string   `json:"target"`
-	NonBlocking  bool     `json:"nonBlocking"`
-	Arguments    []string `json:"arguments"`
+	InvocationId string            `json:"invocationId"`
+	Type         int               `json:"type"`
+	Target       string            `json:"target"`
+	NonBlocking  bool              `json:"nonBlocking"`
+	Arguments    []string          `json:"arguments"`
 	Meta         map[string]string `json:"meta"`
 }
 
@@ -47,7 +47,7 @@ type MsgpackInvocation struct {
 	Arguments    []string
 }
 
-type MsgpackInvocationWithNoblocking struct {
+type MsgpackInvocationWithNonblocking struct {
 	MessageType  int32
 	InvocationId string
 	NonBlocking  bool
@@ -55,21 +55,40 @@ type MsgpackInvocationWithNoblocking struct {
 	Arguments    []string
 }
 
-type ServiceMsgpackInvocation struct {
+type ServiceMsgpackInvocationWithNonblocking struct {
 	MessageType  int32
 	InvocationId string
 	NonBlocking  bool
-	Meta         map[string]string
 	Target       string
 	Arguments    []string
+	Meta map[string]string
 }
 
-func (m *MsgpackInvocationWithNoblocking) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (m *ServiceMsgpackInvocationWithNonblocking) EncodeMsgpack(enc *msgpack.Encoder) error {
+	enc.EncodeArrayLen(5)
+	return enc.Encode(m.MessageType, m.InvocationId, m.NonBlocking, m.Meta, m.Target, m.Arguments)
+}
+
+func (m *ServiceMsgpackInvocationWithNonblocking) DecodeMsgpack(dec *msgpack.Decoder) error {
+	dec.DecodeArrayLen()
+	messageType, err := dec.DecodeInt32()
+	if err != nil {
+		fmt.Printf("Failed to decode message %v\n", dec)
+		return err
+	}
+	m.MessageType = messageType
+	if messageType == 1 {
+		return dec.Decode(&m.InvocationId, &m.NonBlocking, &m.Meta, &m.Target, &m.Arguments)
+	}
+	return nil
+}
+
+func (m *MsgpackInvocationWithNonblocking) EncodeMsgpack(enc *msgpack.Encoder) error {
 	enc.EncodeArrayLen(5)
 	return enc.Encode(m.MessageType, m.InvocationId, m.NonBlocking, m.Target, m.Arguments)
 }
 
-func (m *MsgpackInvocationWithNoblocking) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (m *MsgpackInvocationWithNonblocking) DecodeMsgpack(dec *msgpack.Decoder) error {
 	dec.DecodeArrayLen()
 	messageType, err := dec.DecodeInt32()
 	if err != nil {
@@ -120,9 +139,30 @@ func encodeSignalRBinary(bytes []byte) ([]byte, error) {
 	return buffer, nil
 }
 
+func unmarshal2ServiceMsgpackContent(msg []byte, containNonBlocking bool) (int32, string, []string, error) {
+	if containNonBlocking {
+		var content ServiceMsgpackInvocationWithNonblocking
+		err := msgpack.Unmarshal(msg, &content)
+		if err != nil {
+			return 0, "", nil, err
+		}
+		return content.MessageType, content.Target, content.Arguments, nil
+	} else {
+		/*
+			var content MsgpackInvocation
+			err := msgpack.Unmarshal(msg, &content)
+			if err != nil {
+				return 0, "", nil, err
+			}
+			return content.MessageType, content.Target, content.Arguments, nil
+		*/
+		return 0, "", nil, nil
+	}
+}
+
 func unmarshal2MsgpackContent(msg []byte, containNonBlocking bool) (int32, string, []string, error) {
-	if (containNonBlocking) {
-		var content MsgpackInvocationWithNoblocking
+	if containNonBlocking {
+		var content MsgpackInvocationWithNonblocking
 		err := msgpack.Unmarshal(msg, &content)
 		if err != nil {
 			return 0, "", nil, err

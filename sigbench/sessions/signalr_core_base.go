@@ -112,8 +112,35 @@ func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, argument
 	return nil
 }
 
-func (s *SignalRCoreBase) sendMsgPackWithNoBlocking(c *websocket.Conn, target string, arguments []string) error {
-	invocation := MsgpackInvocationWithNoblocking{
+func (s *SignalRCoreBase) sendServiceMsgPackWithNonBlocking(c *websocket.Conn, target string, arguments []string) error {
+	var meta map[string]string
+	invocation := ServiceMsgpackInvocationWithNonblocking{
+		MessageType:  1,
+		InvocationId: strconv.Itoa(invocationId),
+		NonBlocking:  false,
+		Target:       target,
+		Arguments:    arguments,
+		Meta:         meta,
+	}
+	msg, err := msgpack.Marshal(&invocation)
+	if err != nil {
+		s.logError("Fail to pack signalr core message", err)
+		return err
+	}
+	msgPack, err := encodeSignalRBinary(msg)
+	if err != nil {
+		s.logError("Fail to encode message", err)
+		return err
+	}
+	c.WriteMessage(websocket.BinaryMessage, msgPack)
+	s.logMsgSendCount(1)
+	s.logMsgSendSize(int64(len(msgPack)))
+	invocationId++
+	return nil
+}
+
+func (s *SignalRCoreBase) sendMsgPackWithNonBlocking(c *websocket.Conn, target string, arguments []string) error {
+	invocation := MsgpackInvocationWithNonblocking{
 		MessageType:  1,
 		InvocationId: strconv.Itoa(invocationId),
 		NonBlocking:  false,

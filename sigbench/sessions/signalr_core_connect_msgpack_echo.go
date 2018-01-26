@@ -87,7 +87,7 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	// Send message
 	sendMessage := func() error {
 		if useNonBlocking == "true" {
-			return s.sendMsgPackWithNoBlocking(c,
+			return s.sendMsgPackWithNonBlocking(c,
 				"echo",
 				[]string{
 					ctx.UserId,
