@@ -1,11 +1,11 @@
 package sessions
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	//"fmt"
-	"net/http"
 	"log"
+	"net/http"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -112,6 +112,31 @@ func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, argument
 	return nil
 }
 
+func (s *SignalRCoreBase) sendMsgPackWithNoBlocking(c *websocket.Conn, target string, arguments []string) error {
+	invocation := MsgpackInvocationWithNoblocking{
+		MessageType:  1,
+		InvocationId: strconv.Itoa(invocationId),
+		NonBlocking:  false,
+		Target:       target,
+		Arguments:    arguments,
+	}
+	msg, err := msgpack.Marshal(&invocation)
+	if err != nil {
+		s.logError("Fail to pack signalr core message", err)
+		return err
+	}
+	msgPack, err := encodeSignalRBinary(msg)
+	if err != nil {
+		s.logError("Fail to encode message", err)
+		return err
+	}
+	c.WriteMessage(websocket.BinaryMessage, msgPack)
+	s.logMsgSendCount(1)
+	s.logMsgSendSize(int64(len(msgPack)))
+	invocationId++
+	return nil
+}
+
 func (s *SignalRCoreBase) sendMsgPack(c *websocket.Conn, target string, arguments []string) error {
 	invocation := MsgpackInvocation{
 		MessageType:  1,
@@ -138,8 +163,8 @@ func (s *SignalRCoreBase) sendMsgPack(c *websocket.Conn, target string, argument
 
 func (s *SignalRCoreBase) signalrCoreConnect(host string, hub string, nego bool) (*websocket.Conn, error) {
 	var wsUrl string
-	if (nego) {
-		negotiateResponse, err := http.Post("http://"+host+"/" + hub + "/negotiate", "text/plain;charset=UTF-8", nil)
+	if nego {
+		negotiateResponse, err := http.Post("http://"+host+"/"+hub+"/negotiate", "text/plain;charset=UTF-8", nil)
 		if err != nil {
 			s.logError("Failed to negotiate with the server", err)
 			return nil, err
@@ -171,16 +196,16 @@ func (s *SignalRCoreBase) signalrCoreServiceConnect(
 	key string,
 	audience string,
 	uid string) (*websocket.Conn, error) {
-        mySigningKey := []byte(key)
-        t := time.Now().Add(time.Second * 30)
-        // Create the Claims
-        claims := &jwt.StandardClaims{
-                ExpiresAt: t.Unix(),
-                Audience:  audience,
-        }
+	mySigningKey := []byte(key)
+	t := time.Now().Add(time.Second * 30)
+	// Create the Claims
+	claims := &jwt.StandardClaims{
+		ExpiresAt: t.Unix(),
+		Audience:  audience,
+	}
 
-        token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-        ss, _ := token.SignedString(mySigningKey)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, _ := token.SignedString(mySigningKey)
 	var wsUrl = "ws://" + endpoint + "/client/" + hub + "?signalRTokenHeader=" + ss + "&uid=" + uid
 	c, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {

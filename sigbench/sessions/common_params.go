@@ -9,4 +9,5 @@ const (
 	ParamUseNego               = "useNego"
 	ParamLazySending           = "lazySending"
 	ParamEnableMetrics         = "EnableMetrics"
+	ParamUseNonBlocking	   = "useNonBlocking"
 )
