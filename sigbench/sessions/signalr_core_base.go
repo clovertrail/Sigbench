@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	//"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -94,14 +95,9 @@ func (s *SignalRCoreBase) concatStr(v1 string, v2 string) string {
 
 var invocationId int = 0
 
-func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, arguments []string) error {
-	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
-		Type:         1,
-		InvocationId: strconv.Itoa(invocationId),
-		Target:       target,
-		Arguments:    arguments,
-	})
-	err = c.WriteMessage(websocket.TextMessage, msg)
+func (s *SignalRCoreBase) sendMsgCore(c *websocket.Conn, msgType int, msg []byte) error {
+	time.Sleep(time.Millisecond * time.Duration(rand.Int()%1000))
+	err := c.WriteMessage(msgType, msg)
 	if err != nil {
 		s.logError("Fail to send msg", err)
 		return err
@@ -109,6 +105,20 @@ func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, argument
 	invocationId++
 	s.logMsgSendCount(1)
 	s.logMsgSendSize(int64(len(msg)))
+	return nil
+}
+
+func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, arguments []string) error {
+	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
+		Type:         1,
+		InvocationId: strconv.Itoa(invocationId),
+		Target:       target,
+		Arguments:    arguments,
+	})
+	err = s.sendMsgCore(c, websocket.TextMessage, msg)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -132,10 +142,11 @@ func (s *SignalRCoreBase) sendServiceMsgPackWithNonBlocking(c *websocket.Conn, t
 		s.logError("Fail to encode message", err)
 		return err
 	}
-	c.WriteMessage(websocket.BinaryMessage, msgPack)
-	s.logMsgSendCount(1)
-	s.logMsgSendSize(int64(len(msgPack)))
-	invocationId++
+
+	err = s.sendMsgCore(c, websocket.BinaryMessage, msgPack)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -157,10 +168,10 @@ func (s *SignalRCoreBase) sendMsgPackWithNonBlocking(c *websocket.Conn, target s
 		s.logError("Fail to encode message", err)
 		return err
 	}
-	c.WriteMessage(websocket.BinaryMessage, msgPack)
-	s.logMsgSendCount(1)
-	s.logMsgSendSize(int64(len(msgPack)))
-	invocationId++
+	err = s.sendMsgCore(c, websocket.BinaryMessage, msgPack)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -181,10 +192,10 @@ func (s *SignalRCoreBase) sendMsgPack(c *websocket.Conn, target string, argument
 		s.logError("Fail to encode message", err)
 		return err
 	}
-	c.WriteMessage(websocket.BinaryMessage, msgPack)
-	s.logMsgSendCount(1)
-	s.logMsgSendSize(int64(len(msgPack)))
-	invocationId++
+	err = s.sendMsgCore(c, websocket.BinaryMessage, msgPack)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
