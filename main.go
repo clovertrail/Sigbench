@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -16,6 +15,7 @@ import (
 	"microsoft.com/sigbench"
 	"microsoft.com/sigbench/snapshot"
 	"microsoft.com/sigbench/service"
+	"gopkg.in/yaml.v2"
 )
 
 func startAsMaster(agents []string, config string, outDir string) {
@@ -37,26 +37,28 @@ func startAsMaster(agents []string, config string, outDir string) {
 	for _, agent := range agents {
 		if err := c.RegisterAgent(agent); err != nil {
 			log.Fatalln("Fail to register agent: ", agent, err)
+			return
 		}
 	}
 
 	var job sigbench.Job
-	if f, err := os.Open(config); err == nil {
-		decoder := json.NewDecoder(f)
-		if err := decoder.Decode(&job); err != nil {
+	if yamlFile, err := ioutil.ReadFile(config); err == nil {
+		if err := yaml.Unmarshal(yamlFile, &job); err != nil {
 			log.Fatalln("Fail to load config file: ", err)
+			return
 		}
-
-		// Make a copy of config file to output directory
-		copy, err := json.MarshalIndent(job, "", "    ")
+		copied, err := yaml.Marshal(&job)
 		if err != nil {
 			log.Fatalln("Fail to encode a copy of config file: ", err)
+			return
 		}
-		if err := ioutil.WriteFile(outDir+"/config.json", copy, 0644); err != nil {
+		if err := ioutil.WriteFile(outDir+"/config.yaml", copied, 0644); err != nil {
 			log.Fatalln("Fail to save a copy of config file: ", err)
+			return
 		}
 	} else {
 		log.Fatalln("Fail to open config file: ", err)
+		return
 	}
 
 	c.Run(&job)
