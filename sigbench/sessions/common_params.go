@@ -9,5 +9,8 @@ const (
 	ParamUseNego               = "useNego"
 	ParamLazySending           = "lazySending"
 	ParamEnableMetrics         = "EnableMetrics"
-	ParamUseNonBlocking	   = "useNonBlocking"
+	ParamUseNonBlocking        = "useNonBlocking"
+	ParamHub                   = "hub"
+	ParamAudience              = "audience"
+	ParamKey                   = "key"
 )

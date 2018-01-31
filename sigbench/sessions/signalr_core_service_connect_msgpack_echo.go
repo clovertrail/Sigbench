@@ -26,8 +26,11 @@ func (s *SignalRServiceConnMsgPackEcho) Execute(ctx *UserContext) error {
 	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
 	useNonBlocking := ctx.Params[ParamUseNonBlocking]
-	c, err := s.signalrCoreServiceConnect(host, "chat",
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", host+"/client/", ctx.UserId)
+	hub := ctx.Params[ParamHub]
+	audience := ctx.Params[ParamAudience]
+	key := ctx.Params[ParamKey]
+	c, err := s.signalrCoreServiceConnect(host, hub,
+		key, audience, ctx.UserId)
 	defer c.Close()
 
 	startSend := make(chan int)
