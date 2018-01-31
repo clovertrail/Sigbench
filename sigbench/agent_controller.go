@@ -97,6 +97,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 		ticker := time.NewTicker(time.Second)
 		for now := range ticker.C {
 			if d*(int64(time.Second))-int64(now.Sub(start)) <= 0 {
+				log.Println("Stopped at ", d*(int64(time.Second)))
 				ticker.Stop()
 				break
 			}
@@ -105,6 +106,7 @@ func (c *AgentController) Run(args *AgentRunArgs, result *AgentRunResult) error 
 			go c.runPhase(&args.Job, &phase, args.AgentCount, args.AgentIdx, &wg)
 
 			if d*(int64(time.Second))-int64(now.Sub(start)) <= 0 {
+				log.Println("Stopped at ", d*(int64(time.Second)))
 				ticker.Stop()
 				break
 			}
