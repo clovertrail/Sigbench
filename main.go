@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -17,6 +18,16 @@ import (
 	"microsoft.com/sigbench/service"
 	"gopkg.in/yaml.v2"
 )
+
+func genPidFile(pidfile string) {
+	f, _ := os.Create(pidfile)
+	defer f.Close()
+
+	_, err := f.WriteString(fmt.Sprintf("%d", os.Getpid()))
+	if err != nil {
+		log.Println("Fail to write pidfile")
+	}
+}
 
 func startAsMaster(agents []string, config string, outDir string) {
 	if len(agents) == 0 {
@@ -126,6 +137,7 @@ func startAsAgent(address string) {
 	if err != nil {
 		log.Fatal("Fail to listen:", err)
 	}
+	genPidFile("/tmp/sigbench.pid")
 	http.Serve(l, nil)
 }
 
