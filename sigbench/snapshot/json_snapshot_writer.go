@@ -17,13 +17,13 @@ func NewJsonSnapshotWriter(filename string) *JsonSnapshotWriter {
 }
 
 type JsonSnapshotCountersRow struct {
-	Time     int64
+	Time     string
 	Counters map[string]int64
 }
 
 func (w *JsonSnapshotWriter) WriteCounters(now time.Time, counters map[string]int64) error {
 	row := &JsonSnapshotCountersRow{
-		Time:     now.Unix(),
+		Time:     time.Now().Format(time.RFC3339),
 		Counters: counters,
 	}
 	data, err := json.Marshal(row)
