@@ -27,7 +27,8 @@ func (s *SignalRConnCoreEcho) Execute(ctx *UserContext) error {
 	useNego := ctx.Params[ParamUseNego]
 	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
-	c, err := s.signalrCoreConnect(host, "chat", useNego == "true")
+	hub := ctx.Params[ParamHub]
+	c, err := s.signalrCoreConnect(host, hub, useNego == "true")
 	defer c.Close()
 
 	startSend := make(chan int)

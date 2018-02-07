@@ -95,8 +95,11 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	if ctx.Params[ParamEnableMetrics] == "true" {
 		s.enableMetrics = true
 	}
-	c, err := s.signalrCoreServiceConnect(host, "chat",
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", host+"/client/", ctx.UserId)
+	hub := ctx.Params[ParamHub]
+	audience := ctx.Params[ParamAudience]
+	key := ctx.Params[ParamKey]
+	c, err := s.signalrCoreServiceConnect(host, hub,
+		key, audience, ctx.UserId)
 	defer c.Close()
 
 	startSend := make(chan int)

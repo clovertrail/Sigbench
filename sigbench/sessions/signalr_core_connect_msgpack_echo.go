@@ -27,7 +27,8 @@ func (s *SignalRConnMsgPackEcho) Execute(ctx *UserContext) error {
 	useNego := ctx.Params[ParamUseNego]
 	lazySending := ctx.Params[ParamLazySending]
 	useNonBlocking := ctx.Params[ParamUseNonBlocking]
-	c, err := s.signalrCoreConnect(host, "chat", useNego == "true")
+	hub := ctx.Params[ParamHub]
+	c, err := s.signalrCoreConnect(host, hub, useNego == "true")
 	defer c.Close()
 
 	startSend := make(chan int)
