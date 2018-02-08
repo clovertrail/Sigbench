@@ -16,6 +16,12 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+const InternalLatencyLength int = 4
+const InternalLatencyStep int64 = 50
+
+const ExternalLatencyLength int = 5
+const ExternalLatencyStep int64 = 200
+
 type SignalRCoreBase struct {
 	cntInProgress    int64
 	cntEstablished   int64

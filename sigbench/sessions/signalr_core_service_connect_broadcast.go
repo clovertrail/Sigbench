@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type SignalRServiceConnCoreEcho struct {
+type SignalRServiceConnCoreBroadcast struct {
 	SignalRCoreBase
 	client2ServiceInternalLat  [InternalLatencyLength]int64
 	service2ServerExternalLat  [ExternalLatencyLength]int64
@@ -26,7 +26,7 @@ type SignalRServiceConnCoreEcho struct {
 	enableMetrics bool
 }
 
-func (s *SignalRServiceConnCoreEcho) logClient2ServiceInternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logClient2ServiceInternalLat(latency int64) {
 	index := int(latency / InternalLatencyStep)
 	if index > InternalLatencyLength-1 {
 		index = InternalLatencyLength - 1
@@ -34,7 +34,7 @@ func (s *SignalRServiceConnCoreEcho) logClient2ServiceInternalLat(latency int64)
 	atomic.AddInt64(&s.client2ServiceInternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) logService2ClientInternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logService2ClientInternalLat(latency int64) {
 	index := int(latency / InternalLatencyStep)
 	if index > InternalLatencyLength-1 {
 		index = InternalLatencyLength - 1
@@ -42,7 +42,7 @@ func (s *SignalRServiceConnCoreEcho) logService2ClientInternalLat(latency int64)
 	atomic.AddInt64(&s.service2ClientInternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) logServerInternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logServerInternalLat(latency int64) {
 	index := int(latency / InternalLatencyStep)
 	if index > InternalLatencyLength-1 {
 		index = InternalLatencyLength - 1
@@ -50,7 +50,7 @@ func (s *SignalRServiceConnCoreEcho) logServerInternalLat(latency int64) {
 	atomic.AddInt64(&s.serverInternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) logService2ServerExternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logService2ServerExternalLat(latency int64) {
 	index := int(latency / ExternalLatencyStep)
 	if index > ExternalLatencyLength-1 {
 		index = ExternalLatencyLength - 1
@@ -61,7 +61,7 @@ func (s *SignalRServiceConnCoreEcho) logService2ServerExternalLat(latency int64)
 	atomic.AddInt64(&s.service2ServerExternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) logServer2ServiceExternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logServer2ServiceExternalLat(latency int64) {
 	index := int(latency / ExternalLatencyStep)
 	if index > ExternalLatencyLength-1 {
 		index = ExternalLatencyLength - 1
@@ -69,7 +69,7 @@ func (s *SignalRServiceConnCoreEcho) logServer2ServiceExternalLat(latency int64)
 	atomic.AddInt64(&s.server2ServiceExternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) logService2ServiceExternalLat(latency int64) {
+func (s *SignalRServiceConnCoreBroadcast) logService2ServiceExternalLat(latency int64) {
 	index := int(latency / ExternalLatencyStep)
 	if index > ExternalLatencyLength-1 {
 		index = ExternalLatencyLength - 1
@@ -77,13 +77,14 @@ func (s *SignalRServiceConnCoreEcho) logService2ServiceExternalLat(latency int64
 	atomic.AddInt64(&s.service2ServiceExternalLat[index], 1)
 }
 
-func (s *SignalRServiceConnCoreEcho) Name() string {
-	return "SignalRCoreService:ConnectEcho"
+func (s *SignalRServiceConnCoreBroadcast) Name() string {
+	return "SignalRCoreService:ConnectBroadcast"
 }
 
-func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
+func (s *SignalRServiceConnCoreBroadcast) Execute(ctx *UserContext) error {
 	s.logInProgress(1)
-
+	var target string
+	target = "broadcastMessage"
 	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
 	if ctx.Params[ParamEnableMetrics] == "true" {
@@ -130,7 +131,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 						startSend <- 1
 					}
 				}
-				if content.Target == "echo" {
+				if content.Target == target {
 					s.logMsgRecvCount(1)
 					s.logMsgRecvSize(int64(len(msgWithTerm)))
 					startTime, _ := strconv.ParseInt(content.Arguments[1], 10, 64)
@@ -178,7 +179,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	}
 	sendMessage := func() error {
 		return s.sendJsonMsg(c,
-			"echo",
+			target,
 			[]string{
 				ctx.UserId,
 				strconv.FormatInt(time.Now().UnixNano(), 10),
@@ -215,7 +216,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	}
 }
 
-func (s *SignalRServiceConnCoreEcho) Counters() map[string]int64 {
+func (s *SignalRServiceConnCoreBroadcast) Counters() map[string]int64 {
 	counters := s.SignalRCoreBase.Counters()
 	if s.enableMetrics {
 		tag := s.counterTag()

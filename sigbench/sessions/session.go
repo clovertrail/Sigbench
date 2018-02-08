@@ -13,13 +13,14 @@ type Session interface {
 }
 
 var SessionMap = map[string]Session{
-	"signalrcoreservice:echo": &SignalRServiceConnCoreEcho{},
-	"signalrcoreservicemsgpack:echo": &SignalRServiceConnMsgPackEcho{},
-	"signalrconncore:echo":		&SignalRConnCoreEcho{},
-	"signalrconnmsgpackcore:echo":		&SignalRConnMsgPackEcho{},
-	//"signalrcore:broadcast:sender": &SignalRCoreBroadcastSender{},
-	//"signalrfx:broadcast:sender":   &SignalRFxBroadcastSender{},
-	//"redis:pubsub":                 &RedisPubSub{},
+	"signalrcoreservice:echo":             &SignalRServiceConnCoreEcho{},
+	"signalrcoreservicemsgpack:echo":      &SignalRServiceConnMsgPackEcho{},
+	"signalrconncore:echo":                &SignalRConnCoreEcho{},
+	"signalrconnmsgpackcore:echo":         &SignalRConnMsgPackEcho{},
+	"signalrconncore:broadcast":           &SignalRConnCoreBroadcast{},
+	"signalrconnmsgpackcore:broadcast":    &SignalRConnMsgPackBroadcast{},
+	"signalrcoreservice:broadcast":        &SignalRServiceConnCoreBroadcast{},
+	"signalrcoreservicemsgpack:broadcast": &SignalRServiceConnMsgPackBroadcast{},
 }
 
 type DummySession struct {
