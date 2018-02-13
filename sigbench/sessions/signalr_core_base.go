@@ -129,14 +129,14 @@ func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, argument
 }
 
 func (s *SignalRCoreBase) sendServiceMsgPackWithNonBlocking(c *websocket.Conn, target string, arguments []string) error {
-	var meta map[string]string
+	//var meta map[string]string
 	invocation := ServiceMsgpackInvocationWithNonblocking{
 		MessageType:  1,
 		InvocationId: strconv.Itoa(invocationId),
 		NonBlocking:  false,
 		Target:       target,
 		Arguments:    arguments,
-		Meta:         meta,
+		//Meta:         meta,
 	}
 	msg, err := msgpack.Marshal(&invocation)
 	if err != nil {

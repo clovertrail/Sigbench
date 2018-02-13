@@ -24,15 +24,6 @@ type SignalRCoreInvocation struct {
 	Arguments []string `json:"arguments"`
 }
 
-type SignalRCoreServiceInvocation struct {
-	InvocationId string            `json:"invocationId"`
-	Type         int               `json:"type"`
-	Target       string            `json:"target"`
-	NonBlocking  bool              `json:"nonBlocking"`
-	Arguments    []string          `json:"arguments"`
-	Meta         map[string]string `json:"meta"`
-}
-
 type SignalRCoreServiceCompletion struct {
 	InvocationId string            `json:"invocationId"`
 	Type         int               `json:"type"`
@@ -61,12 +52,12 @@ type ServiceMsgpackInvocationWithNonblocking struct {
 	NonBlocking  bool
 	Target       string
 	Arguments    []string
-	Meta map[string]string
+	//Meta map[string]string
 }
 
 func (m *ServiceMsgpackInvocationWithNonblocking) EncodeMsgpack(enc *msgpack.Encoder) error {
 	enc.EncodeArrayLen(5)
-	return enc.Encode(m.MessageType, m.InvocationId, m.NonBlocking, m.Meta, m.Target, m.Arguments)
+	return enc.Encode(m.MessageType, m.InvocationId, m.NonBlocking, m.Target, m.Arguments)
 }
 
 func (m *ServiceMsgpackInvocationWithNonblocking) DecodeMsgpack(dec *msgpack.Decoder) error {
@@ -78,7 +69,7 @@ func (m *ServiceMsgpackInvocationWithNonblocking) DecodeMsgpack(dec *msgpack.Dec
 	}
 	m.MessageType = messageType
 	if messageType == 1 {
-		return dec.Decode(&m.InvocationId, &m.NonBlocking, &m.Meta, &m.Target, &m.Arguments)
+		return dec.Decode(&m.InvocationId, &m.NonBlocking, &m.Target, &m.Arguments)
 	}
 	return nil
 }
