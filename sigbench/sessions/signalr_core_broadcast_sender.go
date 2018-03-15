@@ -180,7 +180,7 @@ func (s *SignalRCoreBroadcastSender) Execute(ctx *UserContext) error {
 		// Send message
 		msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
 			Type:         1,
-			InvocationId: "0",
+			//InvocationId: "0",
 			Target:       "send",
 			Arguments: []string{
 				ctx.UserId,

@@ -84,16 +84,12 @@ func (s *SignalRServiceConnCoreEcho) Name() string {
 func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 	s.logInProgress(1)
 
-	host := ctx.Params[ParamHost]
 	lazySending := ctx.Params[ParamLazySending]
+	appHost := ctx.Params[ParamAppHost]
 	if ctx.Params[ParamEnableMetrics] == "true" {
 		s.enableMetrics = true
 	}
-	hub := ctx.Params[ParamHub]
-	audience := ctx.Params[ParamAudience]
-	key := ctx.Params[ParamKey]
-	c, err := s.signalrCoreServiceConnect(host, hub,
-		key, audience, ctx.UserId)
+	c, err := s.signalrCoreServiceConnectApp(appHost)
 	defer c.Close()
 
 	startSend := make(chan int)
@@ -120,6 +116,7 @@ func (s *SignalRServiceConnCoreEcho) Execute(ctx *UserContext) error {
 			var content SignalRCoreInvocation
 			err = json.Unmarshal(msg, &content)
 			if err != nil {
+				fmt.Printf("%s\n", content)
 				s.logError("Fail to decode incoming message", err)
 				return
 			}

@@ -9,6 +9,7 @@ const (
 	ParamUseNego               = "useNego"
 	ParamLazySending           = "lazySending"
 	ParamEnableMetrics         = "EnableMetrics"
+	ParamAppHost               = "appHost"
 	ParamUseNonBlocking        = "useNonBlocking"
 	ParamHub                   = "hub"
 	ParamAudience              = "audience"

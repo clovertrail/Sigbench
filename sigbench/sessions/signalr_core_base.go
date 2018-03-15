@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,11 @@ const InternalLatencyStep int64 = 50
 
 const ExternalLatencyLength int = 5
 const ExternalLatencyStep int64 = 200
+
+type SignalrServiceHandshake struct {
+        ServiceUrl string `json:"serviceUrl"`
+        JwtBearer  string `json:"accessToken"`
+}
 
 type SignalRCoreBase struct {
 	cntInProgress    int64
@@ -117,7 +123,7 @@ func (s *SignalRCoreBase) sendMsgCore(c *websocket.Conn, msgType int, msg []byte
 func (s *SignalRCoreBase) sendJsonMsg(c *websocket.Conn, target string, arguments []string) error {
 	msg, err := SerializeSignalRCoreMessage(&SignalRCoreInvocation{
 		Type:         1,
-		InvocationId: strconv.Itoa(invocationId),
+		//InvocationId: strconv.Itoa(invocationId),
 		Target:       target,
 		Arguments:    arguments,
 	})
@@ -234,6 +240,35 @@ func (s *SignalRCoreBase) signalrCoreConnect(host string, hub string, nego bool)
 	return c, nil
 }
 
+func (s *SignalRCoreBase) signalrCoreServiceConnectApp(
+	endpoint string) (*websocket.Conn, error) {
+	negotiateResponse, err := http.Get("http://" + endpoint + "/signalr/chat")
+        if err != nil {
+                s.logError("connection:error Failed to negotiate with the server", err)
+                return nil, err
+        }
+        defer negotiateResponse.Body.Close()
+
+        decoder := json.NewDecoder(negotiateResponse.Body)
+        var handshake SignalrServiceHandshake
+        err = decoder.Decode(&handshake)
+        if err != nil {
+                s.logError("connection:error Failed to decode service URL and jwtBearer", err)
+                return nil, err
+        }
+	var httpPrefix = regexp.MustCompile("^https?://")
+	baseURL := httpPrefix.ReplaceAllString(handshake.ServiceUrl, "ws://")
+        wsURL := baseURL + "&access_token=" + handshake.JwtBearer
+
+        c, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+        if err != nil {
+                s.logError("connection:error Failed to connect to websocket", err)
+                return nil, err
+        }
+	return c, nil
+}
+
+
 func (s *SignalRCoreBase) signalrCoreServiceConnect(
 	endpoint string,
 	hub string,
@@ -241,7 +276,7 @@ func (s *SignalRCoreBase) signalrCoreServiceConnect(
 	audience string,
 	uid string) (*websocket.Conn, error) {
 	mySigningKey := []byte(key)
-	t := time.Now().Add(time.Second * 30)
+	t := time.Now().Add(time.Second * 120)
 	// Create the Claims
 	claims := &jwt.StandardClaims{
 		ExpiresAt: t.Unix(),

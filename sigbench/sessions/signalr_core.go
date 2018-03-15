@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -16,8 +17,12 @@ type SignalRCoreHandshakeResp struct {
 	ConnectionId        string   `json:"connectionId"`
 }
 
+type SignalRCommon struct {
+        Type         int      `json:"type"`
+}
+
 type SignalRCoreInvocation struct {
-	InvocationId string `json:"invocationId"`
+	//InvocationId string `json:"invocationId"`
 	Type         int    `json:"type"`
 	Target       string `json:"target"`
 	//	NonBlocking  bool     `json:"nonBlocking"`
@@ -195,4 +200,8 @@ func SerializeSignalRCoreMessage(body interface{}) ([]byte, error) {
 	}
 
 	return append(msg, SignalRCoreTerminator), nil
+}
+
+func TokenizeBytes(data []byte) ([][]byte) {
+	return bytes.Split(data, []byte{0x1e});
 }
